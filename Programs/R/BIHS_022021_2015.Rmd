@@ -158,7 +158,7 @@ rm(FCT_Bangladesh,FCT_India,FCT_all)
 3. Calculate calories for each recipe
 ```{r calculate recipe calories}
 
-#task: line 165: cwgt does not exist, changed to "x1_09"
+#task:  line 165: cwgt does not exist, changed to "x1_09"
 
 #join recipe dataset with menucodes to include menu names
 x1_f_2015_m = left_join(x1_female_2015,menucodes,by=c("menu"))%>%
