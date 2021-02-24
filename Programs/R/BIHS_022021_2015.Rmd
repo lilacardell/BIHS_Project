@@ -11,7 +11,7 @@ output: pdf_document
 Set working directory and install packages
 ```{r setup, include=FALSE}
 
-knitr::opts_chunk$set(echo = FALSE,root.dir='D:/SP21/BIHSgit/BIHS_Project ',warning = FALSE, message=FALSE)
+knitr::opts_chunk$set(echo = FALSE,root.dir='/Users/juli/Desktop/BIHS/master/BIHS_Project ',warning = FALSE, message=FALSE)
 options(scipen=999)
 set.seed(12345)
 ###  Check for and load Packages   ###
@@ -55,7 +55,7 @@ lapply(packages, pkgTest)
 ```{r import BIHS data,results='hide'}
 # Read in data for project
 
-setwd("D:/SP21/BIHSgit/BIHS_Project/Data")
+setwd("/Users/juli/Desktop/BIHS/master/BIHS_Project/Data")
 
 #this pulls in all 2015 household level files except the WEAI
 filenames<-grep(list.files(path="./Raw Data/bihs_2015/household/data"),pattern=c("weai","h"),inv=TRUE,value=TRUE)
@@ -126,7 +126,7 @@ rm(filenames,filepath,i,names,x1_1_f_2015)
 2. Import FCT Data
 ```{r import FCT Data,results='hide'}
 
-setwd("D:/SP21/BIHSgit/BIHS_Project/Data/Clean Data/nutrient tables")
+setwd("/Users/juli/Desktop/BIHS/master/BIHS_Project/Data/Clean Data/nutrient tables")
 ###Import nutrition data
 FCT_Bangladesh =read_excel("./FCDB_7_4_14_LC.xlsx",sheet = "UserDB_Main_table")%>% 
 dplyr::select(2,3,8,11:13,16,17)%>% 
@@ -357,7 +357,7 @@ rm(adult_2015,child_2015)
 6. Create Individual Roster
 ```{r roster_I,results='hide'}
 
-setwd("D:/SP21/BIHSgit/BIHS_Project/Data/")
+setwd("/Users/juli/Desktop/BIHS/master/BIHS_Project/Data/")
 
 ###CREATE INDIVIDUAL ROSTER###
 #add BMI and nutrition consumption to individual roster_2015\
@@ -656,10 +656,10 @@ hh_type = aggregate(hhid~sampletype, data=roster_2015_hh, FUN = length)
 #3:National Representative 4423
 
 #import weights
-weights_2015 <- read_dta("D:/SP21/BIHSgit/BIHS_Project/Data/Raw Data/bihs_2015/IFPRI_BIHS_R2_exp.dta") %>%
+weights_2015 <- read_dta("/Users/juli/Desktop/BIHS/master/BIHS_Project/Data/Raw Data/bihs_2015/IFPRI_BIHS_R2_exp.dta") %>%
   dplyr::select(a01,dvcode,vcode,aeu,hhweightR2,popweightR2)
 
-#weights_2015 <- read_dta("D:/SP21/BIHSgit/BIHS_Project/Data/Raw Data/bihs_2015/IFPRI_BIHS_R2_exp.dta")
+#weights_2015 <- read_dta("/Users/juli/Desktop/BIHS/master/BIHS_Project/Data/Raw Data/bihs_2015/IFPRI_BIHS_R2_exp.dta")
 
 
 #choose sample type 2 and 3, eliminate poly households
@@ -704,7 +704,7 @@ abc=ab%>%
    mutate(mean=if_else(mean<1,paste0(round(mean*100,2),"%"),as.character(round(mean,2))))
   
 
-setwd("D:/SP21/BIHSgit/BIHS_Project/Programs/R/output")
+setwd("/Users/juli/Desktop/BIHS/master/BIHS_Project/Programs/R/output")
 
 descriptives=kable(abc,booktabs=TRUE,digits=3,
                    col.names=c("Variable","Weighted Mean","SD"),escape=F)%>%
@@ -721,7 +721,7 @@ save_kable(descriptives,"BIHS_Projectdescriptives.png")
 
 
 #a=qflextable(ab)
-#write.table(ab,file="D:/SP21/BIHSgit/BIHS_Project/Programs/R/output/descriptives.doc")
+#write.table(ab,file="/Users/juli/Desktop/BIHS/master/BIHS_Project/Programs/R/output/descriptives.doc")
 
 
 rm(listx,ab,a,abc)
@@ -734,7 +734,7 @@ Import India Reference standards and Energy Requirements
 
 #INDIA requirements and AE
 #read in adult equivalent from India
-AE_India <-read_excel("D:/SP21/BIHSgit/BIHS_Project/Data/Clean Data/nutrient standards/GuidelinesIndia_2011.xlsx",sheet="AE_India",range = "A1:D13",col_types =  "numeric")
+AE_India <-read_excel("/Users/juli/Desktop/BIHS/master/BIHS_Project/Data/Clean Data/nutrient standards/GuidelinesIndia_2011.xlsx",sheet="AE_India",range = "A1:D13",col_types =  "numeric")
 
 
 #join AE 
@@ -746,15 +746,16 @@ w.I.roster.2015=fuzzy_left_join(w.I.roster.2015,AE_India,
 
 
 #India Dietary requirements
-India_RDA<-read_excel("D:/SP21/BIHSgit/BIHS_Project/Data/Clean Data/nutrient standards/GuidelinesIndia_2011.xlsx",sheet="India_RDA",range = "A1:k19",col_names = TRUE)%>%
+India_RDA<-read_excel("/Users/juli/Desktop/BIHS/master/BIHS_Project/Data/Clean Data/nutrient standards/GuidelinesIndia_2011.xlsx",sheet="India_RDA",range = "A1:k19",col_names = TRUE)%>%
   mutate(sex=if_else(sex=="male",1,2),agemin=as.numeric(agemin),agemax=as.numeric(agemax),
          activity=if_else(is.na(activity),"moderate",activity))%>%
   dplyr::select(-1)
 
 
 #join India requirements (all are using ref weight and height, and assume moderate activity for under 18 p66 Inida (2009))
-#task: bug here about agemin and agemax
+#task: unselect agemin and agemax in w.I roster.2015
 w.I.roster.2015=w.I.roster.2015%>%
+  select(!c("agemin","agemax"))%>%
   mutate(activityI=if_else(age>=18,activity,"moderate"))%>%
   fuzzy_left_join(India_RDA,
                 by=c("sex","activityI"="activity","age"="agemin", "age"="agemax"),
@@ -768,7 +769,7 @@ w.I.roster.2015=w.I.roster.2015%>%
     )%>%
   dplyr::select(-contains(".y"),-agemin,-agemax,-calcium_rda_India,-iron_rda_India,-kcal_India)
 
-
+#task : the columns of w.I roster.2015 are different from those of  w.I roster.2011
 rm(list=ls(pattern="India"))
 
 
@@ -778,17 +779,17 @@ rm(list=ls(pattern="India"))
 Import FAO height weight and BMI reference standards and energy Requirements
 ```{r FAO}
 
-setwd("D:/SP21/BIHSgit/BIHS_Project/Data/Clean Data/nutrient standards")
+setwd("/Users/juli/Desktop/BIHS/master/BIHS_Project/Data/Clean Data/nutrient standards")
 
 #FAO weight height
-hfa_girls_24 <- read_excel("./WHOFAO_requirements_2015.xlsx",sheet="hfa_girls_25",col_names = TRUE)%>%
+hfa_girls_24 <- read_excel("./WHOFAO_requirements_2011.xlsx",sheet="hfa_girls_25",col_names = TRUE)%>%
   mutate(year=floor(Month/12),month=Month-year*12,sex=2)%>%
     dplyr::rename_at(.vars=vars(contains("P")),.funs=funs(paste("h",.,sep="_")))%>%
   dplyr::select(sex,year,month,contains("h_P"))%>%
   filter(year%in%(2:4))%>%
   mutate(h_med=h_P50)
 
-wfa_girls_24 <- read_excel("./WHOFAO_requirements_2015.xlsx",sheet="wfa_girls_05",col_names = TRUE)%>%
+wfa_girls_24 <- read_excel("./WHOFAO_requirements_2011.xlsx",sheet="wfa_girls_05",col_names = TRUE)%>%
   mutate(year=floor(Month/12),month=Month-year*12,sex=2)%>%
     dplyr::rename_at(.vars=vars(contains("P")),.funs=funs(paste("w",.,sep="_")))%>%
   dplyr::select(sex,year,month,contains("w_P"))%>%
@@ -797,19 +798,19 @@ wfa_girls_24 <- read_excel("./WHOFAO_requirements_2015.xlsx",sheet="wfa_girls_05
 
 girls_24=left_join(hfa_girls_24,wfa_girls_24,by=c("sex","year","month"))
 
-hfa_girls_519 <- read_excel("./WHOFAO_requirements_2015.xlsx",sheet="hfa_girls_519",col_names = TRUE)%>%
+hfa_girls_519 <- read_excel("./WHOFAO_requirements_2011.xlsx",sheet="hfa_girls_519",col_names = TRUE)%>%
    mutate(year=floor(Month/12),month=Month-year*12,sex=2)%>%
     dplyr::rename_at(.vars=vars(contains("P")),.funs=funs(paste("h",.,sep="_")))%>%
   dplyr::select(sex,year,month,contains("h_P"))%>%
   mutate(h_med=h_P50)
 
-wfa_girls_510 <- read_excel("./WHOFAO_requirements_2015.xlsx",sheet="wfa_girls_510",col_names = TRUE)%>%
+wfa_girls_510 <- read_excel("./WHOFAO_requirements_2011.xlsx",sheet="wfa_girls_510",col_names = TRUE)%>%
 mutate(year=floor(Month/12),month=Month-year*12,sex=2)%>%
     dplyr::rename_at(.vars=vars(contains("P")),.funs=funs(paste("w",.,sep="_")))%>%
   dplyr::select(sex,year,month,contains("w_P"))%>%
   mutate(w_med=w_P50)
 
-bmi_girls_519 <- read_excel("./WHOFAO_requirements_2015.xlsx",sheet="bmi_girls_519",col_names = TRUE)%>%
+bmi_girls_519 <- read_excel("./WHOFAO_requirements_2011.xlsx",sheet="bmi_girls_519",col_names = TRUE)%>%
 mutate(year=floor(Month/12),month=Month-year*12,sex=2)%>%
     dplyr::rename_at(.vars=vars(contains("P")),.funs=funs(paste("b",.,sep="_")))%>%
   dplyr::select(sex,year,month,contains("b_P"))%>%
@@ -853,14 +854,14 @@ for(i in 14:50){
 rm(list=ls(pattern="girls"),women_20,x,y)
  
 
-hfa_boys_24 <- read_excel("./WHOFAO_requirements_2015.xlsx",sheet="hfa_boys_25",col_names = TRUE)%>%
+hfa_boys_24 <- read_excel("./WHOFAO_requirements_2011.xlsx",sheet="hfa_boys_25",col_names = TRUE)%>%
   mutate(year=floor(Month/12),month=Month-year*12,sex=1)%>%
     dplyr::rename_at(.vars=vars(contains("P")),.funs=funs(paste("h",.,sep="_")))%>%
   dplyr::select(sex,year,month,contains("h_P"))%>%
   filter(year%in%(2:4))%>%
   mutate(h_med=h_P50)
 
-wfa_boys_24 <- read_excel("./WHOFAO_requirements_2015.xlsx",sheet="wfa_boys_05",col_names = TRUE)%>%
+wfa_boys_24 <- read_excel("./WHOFAO_requirements_2011.xlsx",sheet="wfa_boys_05",col_names = TRUE)%>%
   mutate(year=floor(Month/12),month=Month-year*12,sex=1)%>%
     dplyr::rename_at(.vars=vars(contains("P")),.funs=funs(paste("w",.,sep="_")))%>%
   dplyr::select(sex,year,month,contains("w_P"))%>%
@@ -870,19 +871,19 @@ wfa_boys_24 <- read_excel("./WHOFAO_requirements_2015.xlsx",sheet="wfa_boys_05",
 boys_24=left_join(hfa_boys_24,wfa_boys_24,by=c("sex","year","month"))
 
 
-hfa_boys_519 <- read_excel("./WHOFAO_requirements_2015.xlsx",sheet="hfa_boys_519",col_names = TRUE)%>%
+hfa_boys_519 <- read_excel("./WHOFAO_requirements_2011.xlsx",sheet="hfa_boys_519",col_names = TRUE)%>%
    mutate(year=floor(Month/12),month=Month-year*12,sex=1)%>%
     dplyr::rename_at(.vars=vars(contains("P")),.funs=funs(paste("h",.,sep="_")))%>%
   dplyr::select(sex,year,month,contains("h_P"))%>%
   mutate(h_med=h_P50)
 
-wfa_boys_510 <- read_excel("./WHOFAO_requirements_2015.xlsx",sheet="wfa_boys_510",col_names = TRUE)%>%
+wfa_boys_510 <- read_excel("./WHOFAO_requirements_2011.xlsx",sheet="wfa_boys_510",col_names = TRUE)%>%
 mutate(year=floor(Month/12),month=Month-year*12,sex=1)%>%
     dplyr::rename_at(.vars=vars(contains("P")),.funs=funs(paste("w",.,sep="_")))%>%
   dplyr::select(sex,year,month,contains("w_P"))%>%
   mutate(w_med=w_P50)
 
-bmi_boys_519 <- read_excel("./WHOFAO_requirements_2015.xlsx",sheet="bmi_boys_519",col_names = TRUE)%>%
+bmi_boys_519 <- read_excel("./WHOFAO_requirements_2011.xlsx",sheet="bmi_boys_519",col_names = TRUE)%>%
 mutate(year=floor(Month/12),month=Month-year*12,sex=1)%>%
     dplyr::rename_at(.vars=vars(contains("P")),.funs=funs(paste("b",.,sep="_")))%>%
   dplyr::select(sex,year,month,contains("b_P"))%>%
@@ -925,12 +926,12 @@ rm(list=ls(pattern="men"))
 
 
 #read in energy requirement formulas
-FAO_adult <- read_excel("./WHOFAO_requirements_2015.xlsx",sheet="Adult_BMRPAL",range = "A1:M37",col_names = TRUE)%>%
+FAO_adult <- read_excel("./WHOFAO_requirements_2011.xlsx",sheet="Adult_BMRPAL",range = "A1:M37",col_names = TRUE)%>%
   dplyr::select(1:6,9:11,13)%>%
   mutate(sex=if_else(sex=="Male",1,2))%>%
   filter(agemin>=18)
 
-FAO_child <- read_excel("./WHOFAO_requirements_2015.xlsx",sheet="Child_TEEPAL",range = "A1:P97",col_names = TRUE)%>% 
+FAO_child <- read_excel("./WHOFAO_requirements_2011.xlsx",sheet="Child_TEEPAL",range = "A1:P97",col_names = TRUE)%>% 
   mutate(sex=if_else(sex=="Male",1,2))%>%
 dplyr::select(1:6,11,13,14,16)
 
@@ -987,7 +988,7 @@ library(plyr)
 
 #DRI standards
 #energy requirements
-IOM_energy <- read_excel("D:/SP21/BIHSgit/BIHS_Project/Data/Clean Data/nutrient standards/IOM_requirements.xlsx",sheet="Energy_IOM",range = "A1:R97",col_names = TRUE)%>% 
+IOM_energy <- read_excel("/Users/juli/Desktop/BIHS/master/BIHS_Project/Data/Clean Data/nutrient standards/IOM_requirements.xlsx",sheet="Energy_IOM",range = "A1:R97",col_names = TRUE)%>% 
   mutate(sex=if_else(sex=="Male",1,2),activity=revalue(PA_level,c("sedentary"="light","low active"="light","active"="moderate","very active"="heavy")),pregnant=if_else(lifestage=="Pregnancy",1,0),lactating=if_else(lifestage=="Lactation",1,0))%>%
 dplyr::select(-1,-2,-PA_level,-age_refmean,-EER_eq)%>%
 dplyr::rename(agemin=age_lower_yrs,agemax=age_upper_yrs,kcal_IOM_grp=EER_IOM_ref,height_IOM_grp=refht_IOM,weight_IOM_grp=refwt_IOM)%>%
@@ -998,7 +999,7 @@ dplyr::rename(agemin=age_lower_yrs,agemax=age_upper_yrs,kcal_IOM_grp=EER_IOM_ref
   mutate(agemax=if_else(is.na(agemax),150,agemax))
 
 #nutrient requirements
-IOM_nutrients <- read_excel("D:/SP21/BIHSgit/BIHS_Project/Data/Clean Data/nutrient standards/IOM_requirements.xlsx",sheet="Nutrients",range = "A1:T23",col_names = TRUE)%>% 
+IOM_nutrients <- read_excel("/Users/juli/Desktop/BIHS/master/BIHS_Project/Data/Clean Data/nutrient standards/IOM_requirements.xlsx",sheet="Nutrients",range = "A1:T23",col_names = TRUE)%>% 
 #dplyr::select(-9,-11)%>% 
   mutate(sex=if_else(sex=="Male",1,2),pregnant=if_else(lifestage=="Pregnancy",1,0),lactating=if_else(lifestage=="Lactation",1,0))%>%
   dplyr::rename(agemin=age_lower_yrs,agemax=age_upper_yrs,calcium_rda_IOM=calcium_rda,calcium_ear_IOM=calcium_ear,
@@ -1089,7 +1090,7 @@ w.hh.roster.2015=left_join(w.hh.roster.2015,hh,by="hhid")
 h=w.hh.roster.2015%>%
   dplyr::select(hhid,contains("hhsize_"),contains("hh_"),AE_OECD,hhds,nofood,hungryday,hungrynight)%>%
   dplyr::rename(hhsize_OECD=AE_OECD)
-
+#task: w.I.roster.2015 does not have column named "hhsize_IOM_grp"
 w.I.roster.2015=left_join(w.I.roster.2015,h,by="hhid")%>%
   mutate(share_India_grp=AE_India_grp/hhsize_India_grp,share_FAO_grp=AE_FAO_grp/hhsize_FAO_grp,share_IOM_grp=AE_IOM_grp/hhsize_IOM_grp,share_FAO_I=AE_FAO_I/hhsize_FAO_I,share_IOM_I=AE_IOM_I/hhsize_IOM_I,share_FAO_age=AE_FAO_age/hhsize_FAO_age,
          age_range=if_else(age>=2&age<4,"Toddler (2-3)", 
@@ -1215,7 +1216,7 @@ Summary Tables for Reference Weights and Heights and Adult Equivalents
 
 options(digits=3,knitr.kable.NA = '')
 
-setwd("D:/SP21/BIHSgit/BIHS_Project/Programs/R/output")
+setwd("/Users/juli/Desktop/BIHS/master/BIHS_Project/Programs/R/output")
 
 #compare reference weights by age group
 allref=w.I.roster.2015%>%
@@ -1348,7 +1349,7 @@ rm(allref,w,ref_wtht,a,h,w,graph_allref)
 12. Individual inadequacy by comparing actual consumption to target (by nutrient)
 ```{r nutrient Inadequacy}
 
-setwd("D:/SP21/BIHSgit/BIHS_Project/Programs/R/output")
+setwd("/Users/juli/Desktop/BIHS/master/BIHS_Project/Programs/R/output")
 
 #######NUTRIENTS
 #allocate share of total hh nutrient to each individual and separate into nutrient-specific tables
@@ -1694,7 +1695,7 @@ print(carb_print)
 13. Individual inadequacy by comparing actual consumption to target (BY REFERENCE SOURCE)
 ```{r I_indequality}
 
-setwd("D:/SP21/BIHSgit/BIHS_Project/Programs/R/output")
+setwd("/Users/juli/Desktop/BIHS/master/BIHS_Project/Programs/R/output")
 
 
 
