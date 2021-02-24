@@ -1076,15 +1076,15 @@ Reference weights and Heights and add back HH variables
 
 #reference weights and heights
 ref_wtht = w.I.roster.2015%>%
-  dplyr::select(hhid,mid,sex,sampletype,age,contains("age_grp"),pregnant,lactating,contains("weight"),contains("height"),contains("code"),contains("R1"))
+  dplyr::select(hhid,mid,sex,sampletype,age,contains("age_grp"),pregnant,lactating,contains("weight"),contains("height"),contains("code"),contains("R2"))
 
 #add back HH-level variables and generate hh level variables
 hh=w.I.roster.2015%>%
   dplyr::select(hhid,contains("AE"),-aeu)%>%
   group_by(hhid)%>%
   dplyr::summarise_all(sum,na.rm=TRUE)%>%
-  dplyr::rename_at(.vars=vars(2:7),.funs=funs(sub("AE_","hhsize_",.)))
-
+  dplyr::rename_at(.vars=vars(4:9),.funs=funs(sub("AE_","hhsize_",.)))
+#task: vars(2:7) into vars(4:9)
 w.hh.roster.2015=left_join(w.hh.roster.2015,hh,by="hhid")
 
 h=w.hh.roster.2015%>%
@@ -1217,7 +1217,7 @@ Summary Tables for Reference Weights and Heights and Adult Equivalents
 options(digits=3,knitr.kable.NA = '')
 
 setwd("/Users/juli/Desktop/BIHS/master/BIHS_Project/Programs/R/output")
-
+#task: cannot find the vcode in w.I.roster.2015
 #compare reference weights by age group
 allref=w.I.roster.2015%>%
   mutate(weight_India_grp_b=if_else(weight<weight_India_grp,1,0),
@@ -1228,15 +1228,15 @@ allref=w.I.roster.2015%>%
           height_FAO_age_b=if_else(height<height_FAO_age,1,0),
          height_IOM_grp_b=if_else(height<height_IOM_grp,1,0),
          sex=as.factor(sex))%>%
-  dplyr::select(hhid,mid,age,age_range,sex,contains("weight"),contains("height"),contains("AE_"),contains("code"),contains("R1"))
+  dplyr::select(hhid,mid,age,age_range,sex,contains("weight"),contains("height"),contains("AE_"),contains("code"),contains("R2"))
   
                 
 
 w_allref=allref%>%
-  as_survey_design(ids=vcode, strata=dvcode,weights=popweightR1)%>%
+  as_survey_design(ids=vcode, strata=dvcode,weights=popweightR2)%>%
   group_by(sex,age_range)%>%
   summarise_all(survey_mean,na.rm=TRUE)%>%
-  dplyr::select(-contains("code"),-contains("R1"),-contains("hhid"),-contains("mid"),-contains("_se"))
+  dplyr::select(-contains("code"),-contains("R2"),-contains("hhid"),-contains("mid"),-contains("_se"))
 
 
 w=allref%>%
@@ -1399,7 +1399,7 @@ for (j in ref){
 }
 
 w_kcal=kcal_inadequacy%>%
-  as_survey_design(ids=vcode, strata=dvcode,weights=popweightR1)%>%
+  as_survey_design(ids=vcode, strata=dvcode,weights=popweightR2)%>%
   group_by(sex,age_range)%>%
   summarise_all(survey_mean,na.rm=TRUE)%>%
   dplyr::select(sex,age_range,contains("inadequate"),contains("gap"),contains("HHok"),contains("Iok"),-contains("_se"))
@@ -1534,7 +1534,7 @@ for (j in ref){
 
 
 w_protein=protein_inadequacy%>%
-  as_survey_design(ids=vcode, strata=dvcode,weights=popweightR1)%>%
+  as_survey_design(ids=vcode, strata=dvcode,weights=popweightR2)%>%
   group_by(sex,age_range)%>%
   summarise_all(survey_mean,na.rm=TRUE)%>%
   dplyr::select(sex,age_range,contains("inadequate"),contains("gap"),-contains("_se"))
@@ -1590,7 +1590,7 @@ for (j in fref){
 
 
 w_fat=fat_inadequacy%>%
-  as_survey_design(ids=vcode, strata=dvcode,weights=popweightR1)%>%
+  as_survey_design(ids=vcode, strata=dvcode,weights=popweightR2)%>%
   group_by(sex,age_range)%>%
   summarise_all(survey_mean,na.rm=TRUE)%>%
   dplyr::select(sex,age_range,contains("inadequate"),contains("gap"),-contains("_se"))
@@ -1646,7 +1646,7 @@ for (j in cref){
 
 
 w_carb=carb_inadequacy%>%
-  as_survey_design(ids=vcode, strata=dvcode,weights=popweightR1)%>%
+  as_survey_design(ids=vcode, strata=dvcode,weights=popweightR2)%>%
   group_by(sex,age_range)%>%
   summarise_all(survey_mean,na.rm=TRUE)%>%
   dplyr::select(sex,age_range,contains("inadequate"),contains("gap"),-contains("_se"))
@@ -1712,10 +1712,10 @@ India_inadequacy=w.I.roster.2015%>%
          fat_gap_India=if_else(fat_inadequate==1,(I_fat-fat_India)/fat_India,as.numeric(NA)),
          calcium_gap_India=if_else(calcium_inadequate==1,(I_calcium-calcium_India)/calcium_India,as.numeric(NA)),
          iron_gap_India=if_else(iron_inadequate==1,(I_iron-iron_India)/iron_India,as.numeric(NA)))%>%
-  dplyr::select(vcode,dvcode,popweightR1,sex,range_India,contains("kcal"),contains("protein"),contains("fat"),contains("calcium"),contains("iron"))
+  dplyr::select(vcode,dvcode,popweightR2,sex,range_India,contains("kcal"),contains("protein"),contains("fat"),contains("calcium"),contains("iron"))
 
 India_w=India_inadequacy%>%
-  as_survey_design(ids=vcode, strata=dvcode,weights=popweightR1)%>%
+  as_survey_design(ids=vcode, strata=dvcode,weights=popweightR2)%>%
   group_by(sex,range_India)%>%
   summarise_all(survey_mean,na.rm=TRUE)%>%
   dplyr::select(-(3:8),-contains("_se"))
@@ -1758,10 +1758,10 @@ FAO_inadequacy=w.I.roster.2015%>%
          protein_inadequate=if_else(I_protein<protein_FAO,1,0))%>%
   mutate(kcal_gap_FAO=if_else(kcal_inadequate==1,(I_kcal-kcal_FAO)/kcal_FAO,as.numeric(NA)),
          protein_gap_FAO=if_else(protein_inadequate==1,(I_protein-protein_FAO)/protein_FAO,as.numeric(NA)))%>%
-  dplyr::select(vcode,dvcode,popweightR1,sex,range_FAO,contains("kcal"),contains("protein"))
+  dplyr::select(vcode,dvcode,popweightR2,sex,range_FAO,contains("kcal"),contains("protein"))
 
 FAO_w=FAO_inadequacy%>%
-  as_survey_design(ids=vcode, strata=dvcode,weights=popweightR1)%>%
+  as_survey_design(ids=vcode, strata=dvcode,weights=popweightR2)%>%
   group_by(sex,range_FAO)%>%
   summarise_all(survey_mean,na.rm=TRUE)%>%
   dplyr::select(-(3:8),-contains("_se"))
@@ -1813,11 +1813,11 @@ IOM_inadequacy=w.I.roster.2015%>%
          protein_gap_IOM=if_else(protein_inadequate==1,(I_protein-protein_amdr_lower)/protein_amdr_lower,as.numeric(NA)),
          carb_gap_IOM=if_else(carb_inadequate==1,(I_carb-carb_amdr_lower)/carb_amdr_lower,as.numeric(NA)),
          fat_gap_IOM=if_else(fat_inadequate==1,(I_fat-fat_amdr_lower)/fat_amdr_lower,as.numeric(NA)))%>%
- dplyr::select(vcode,dvcode,popweightR1,sex,range_IOM,contains("kcal"),contains("protein"),contains("carb"),contains("fat"),contains("calcium"),contains("iron"),-contains("upper"),-protein_IOM)
+ dplyr::select(vcode,dvcode,popweightR2,sex,range_IOM,contains("kcal"),contains("protein"),contains("carb"),contains("fat"),contains("calcium"),contains("iron"),-contains("upper"),-protein_IOM)
 
 
 IOM_w=IOM_inadequacy%>%
-  as_survey_design(ids=vcode, strata=dvcode,weights=popweightR1)%>%
+  as_survey_design(ids=vcode, strata=dvcode,weights=popweightR2)%>%
   group_by(sex,range_IOM)%>%
   summarise_all(survey_mean,na.rm=TRUE)%>%
   dplyr::select(-(3:8),-contains("_se"))
