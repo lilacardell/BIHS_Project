@@ -738,12 +738,13 @@ AE_India <-read_excel("/Users/juli/Desktop/BIHS/master/BIHS_Project/Data/Clean D
 
 
 #join AE 
+#task: use column names instead of index to deselect columns
 w.I.roster.2015=fuzzy_left_join(w.I.roster.2015,AE_India, 
                 by=c("age"="agemin", "age"="agemax"),
                 match_fun=list(`>=`, `<=`))%>%
   mutate(AE_India_grp=if_else(sex==1,AE_male,if_else(sex==2 & porl==1,1.17,AE_female)))%>%
-  dplyr::select(-(39:42))
-
+  dplyr::select(-c("agemin","agemax","AE_male","AE_female"))
+#,"agemin.x","agemin.y","agemax.x","agemax.y","AE_male.x","AE_female.x","AE_male.y","AE_female.y"))
 
 #India Dietary requirements
 India_RDA<-read_excel("/Users/juli/Desktop/BIHS/master/BIHS_Project/Data/Clean Data/nutrient standards/GuidelinesIndia_2011.xlsx",sheet="India_RDA",range = "A1:k19",col_names = TRUE)%>%
@@ -755,7 +756,7 @@ India_RDA<-read_excel("/Users/juli/Desktop/BIHS/master/BIHS_Project/Data/Clean D
 #join India requirements (all are using ref weight and height, and assume moderate activity for under 18 p66 Inida (2009))
 #task: unselect agemin and agemax in w.I roster.2015
 w.I.roster.2015=w.I.roster.2015%>%
-  select(!c("agemin","agemax"))%>%
+  #select(!c("agemin","agemax"))%>%
   mutate(activityI=if_else(age>=18,activity,"moderate"))%>%
   fuzzy_left_join(India_RDA,
                 by=c("sex","activityI"="activity","age"="agemin", "age"="agemax"),
@@ -1083,8 +1084,7 @@ hh=w.I.roster.2015%>%
   dplyr::select(hhid,contains("AE"),-aeu)%>%
   group_by(hhid)%>%
   dplyr::summarise_all(sum,na.rm=TRUE)%>%
-  dplyr::rename_at(.vars=vars(4:9),.funs=funs(sub("AE_","hhsize_",.)))
-#task: vars(2:7) into vars(4:9)
+  dplyr::rename_at(.vars=vars(2:7),.funs=funs(sub("AE_","hhsize_",.)))
 w.hh.roster.2015=left_join(w.hh.roster.2015,hh,by="hhid")
 
 h=w.hh.roster.2015%>%
