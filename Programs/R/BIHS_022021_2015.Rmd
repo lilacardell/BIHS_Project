@@ -11,7 +11,7 @@ output: pdf_document
 Set working directory and install packages
 ```{r setup, include=FALSE}
 
-knitr::opts_chunk$set(echo = FALSE,root.dir='D:/SP21/BIHSgit/BIHS_Project ',warning = FALSE, message=FALSE)
+knitr::opts_chunk$set(echo = FALSE,root.dir='/Users/juli/Desktop/BIHS/master/BIHS_Project ',warning = FALSE, message=FALSE)
 options(scipen=999)
 set.seed(12345)
 ###  Check for and load Packages   ###
@@ -55,7 +55,7 @@ lapply(packages, pkgTest)
 ```{r import BIHS data,results='hide'}
 # Read in data for project
 
-setwd("D:/SP21/BIHSgit/BIHS_Project/Data")
+setwd("/Users/juli/Desktop/BIHS/master/BIHS_Project/Data")
 
 #this pulls in all 2015 household level files except the WEAI
 filenames<-grep(list.files(path="./Raw Data/bihs_2015/household/data"),pattern=c("weai","h"),inv=TRUE,value=TRUE)
@@ -126,7 +126,7 @@ rm(filenames,filepath,i,names,x1_1_f_2015)
 2. Import FCT Data
 ```{r import FCT Data,results='hide'}
 
-setwd("D:/SP21/BIHSgit/BIHS_Project/Data/Clean Data/nutrient tables")
+setwd("/Users/juli/Desktop/BIHS/master/BIHS_Project/Data/Clean Data/nutrient tables")
 ###Import nutrition data
 FCT_Bangladesh =read_excel("./FCDB_7_4_14_LC.xlsx",sheet = "UserDB_Main_table")%>% 
 dplyr::select(2,3,8,11:13,16,17)%>% 
@@ -357,7 +357,7 @@ rm(adult_2015,child_2015)
 6. Create Individual Roster
 ```{r roster_I,results='hide'}
 
-setwd("D:/SP21/BIHSgit/BIHS_Project/Data/")
+setwd("/Users/juli/Desktop/BIHS/master/BIHS_Project/Data/")
 
 ###CREATE INDIVIDUAL ROSTER###
 #add BMI and nutrition consumption to individual roster_2015\
@@ -656,10 +656,10 @@ hh_type = aggregate(hhid~sampletype, data=roster_2015_hh, FUN = length)
 #3:National Representative 4423
 
 #import weights
-weights_2015 <- read_dta("D:/SP21/BIHSgit/BIHS_Project/Data/Raw Data/bihs_2015/IFPRI_BIHS_R2_exp.dta") %>%
+weights_2015 <- read_dta("/Users/juli/Desktop/BIHS/master/BIHS_Project/Data/Raw Data/bihs_2015/IFPRI_BIHS_R2_exp.dta") %>%
   dplyr::select(a01,dvcode,vcode,aeu,hhweightR2,popweightR2)
 
-#weights_2015 <- read_dta("D:/SP21/BIHSgit/BIHS_Project/Data/Raw Data/bihs_2015/IFPRI_BIHS_R2_exp.dta")
+#weights_2015 <- read_dta("/Users/juli/Desktop/BIHS/master/BIHS_Project/Data/Raw Data/bihs_2015/IFPRI_BIHS_R2_exp.dta")
 
 
 #choose sample type 2 and 3, eliminate poly households
@@ -704,7 +704,7 @@ abc=ab%>%
    mutate(mean=if_else(mean<1,paste0(round(mean*100,2),"%"),as.character(round(mean,2))))
   
 
-setwd("D:/SP21/BIHSgit/BIHS_Project/Programs/R/output")
+setwd("/Users/juli/Desktop/BIHS/master/BIHS_Project/Programs/R/output")
 
 descriptives=kable(abc,booktabs=TRUE,digits=3,
                    col.names=c("Variable","Weighted Mean","SD"),escape=F)%>%
@@ -721,7 +721,7 @@ save_kable(descriptives,"BIHS_Projectdescriptives.png")
 
 
 #a=qflextable(ab)
-#write.table(ab,file="D:/SP21/BIHSgit/BIHS_Project/Programs/R/output/descriptives.doc")
+#write.table(ab,file="/Users/juli/Desktop/BIHS/master/BIHS_Project/Programs/R/output/descriptives.doc")
 
 
 rm(listx,ab,a,abc)
@@ -734,7 +734,7 @@ Import India Reference standards and Energy Requirements
 
 #INDIA requirements and AE
 #read in adult equivalent from India
-AE_India <-read_excel("D:/SP21/BIHSgit/BIHS_Project/Data/Clean Data/nutrient standards/GuidelinesIndia_2011.xlsx",sheet="AE_India",range = "A1:D13",col_types =  "numeric")
+AE_India <-read_excel("/Users/juli/Desktop/BIHS/master/BIHS_Project/Data/Clean Data/nutrient standards/GuidelinesIndia_2011.xlsx",sheet="AE_India",range = "A1:D13",col_types =  "numeric")
 
 
 #join AE 
@@ -747,7 +747,7 @@ w.I.roster.2015=fuzzy_left_join(w.I.roster.2015,AE_India,
 #,"agemin.x","agemin.y","agemax.x","agemax.y","AE_male.x","AE_female.x","AE_male.y","AE_female.y"))
 
 #India Dietary requirements
-India_RDA<-read_excel("D:/SP21/BIHSgit/BIHS_Project/Data/Clean Data/nutrient standards/GuidelinesIndia_2011.xlsx",sheet="India_RDA",range = "A1:k19",col_names = TRUE)%>%
+India_RDA<-read_excel("/Users/juli/Desktop/BIHS/master/BIHS_Project/Data/Clean Data/nutrient standards/GuidelinesIndia_2011.xlsx",sheet="India_RDA",range = "A1:k19",col_names = TRUE)%>%
   mutate(sex=if_else(sex=="male",1,2),agemin=as.numeric(agemin),agemax=as.numeric(agemax),
          activity=if_else(is.na(activity),"moderate",activity))%>%
   dplyr::select(-1)
@@ -780,7 +780,7 @@ rm(list=ls(pattern="India"))
 Import FAO height weight and BMI reference standards and energy Requirements
 ```{r FAO}
 
-setwd("D:/SP21/BIHSgit/BIHS_Project/Data/Clean Data/nutrient standards")
+setwd("/Users/juli/Desktop/BIHS/master/BIHS_Project/Data/Clean Data/nutrient standards")
 
 #FAO weight height
 hfa_girls_24 <- read_excel("./WHOFAO_requirements_2011.xlsx",sheet="hfa_girls_25",col_names = TRUE)%>%
@@ -989,7 +989,7 @@ library(plyr)
 
 #DRI standards
 #energy requirements
-IOM_energy <- read_excel("D:/SP21/BIHSgit/BIHS_Project/Data/Clean Data/nutrient standards/IOM_requirements.xlsx",sheet="Energy_IOM",range = "A1:R97",col_names = TRUE)%>% 
+IOM_energy <- read_excel("/Users/juli/Desktop/BIHS/master/BIHS_Project/Data/Clean Data/nutrient standards/IOM_requirements.xlsx",sheet="Energy_IOM",range = "A1:R97",col_names = TRUE)%>% 
   mutate(sex=if_else(sex=="Male",1,2),activity=revalue(PA_level,c("sedentary"="light","low active"="light","active"="moderate","very active"="heavy")),pregnant=if_else(lifestage=="Pregnancy",1,0),lactating=if_else(lifestage=="Lactation",1,0))%>%
 dplyr::select(-1,-2,-PA_level,-age_refmean,-EER_eq)%>%
 dplyr::rename(agemin=age_lower_yrs,agemax=age_upper_yrs,kcal_IOM_grp=EER_IOM_ref,height_IOM_grp=refht_IOM,weight_IOM_grp=refwt_IOM)%>%
@@ -1000,7 +1000,7 @@ dplyr::rename(agemin=age_lower_yrs,agemax=age_upper_yrs,kcal_IOM_grp=EER_IOM_ref
   mutate(agemax=if_else(is.na(agemax),150,agemax))
 
 #nutrient requirements
-IOM_nutrients <- read_excel("D:/SP21/BIHSgit/BIHS_Project/Data/Clean Data/nutrient standards/IOM_requirements.xlsx",sheet="Nutrients",range = "A1:T23",col_names = TRUE)%>% 
+IOM_nutrients <- read_excel("/Users/juli/Desktop/BIHS/master/BIHS_Project/Data/Clean Data/nutrient standards/IOM_requirements.xlsx",sheet="Nutrients",range = "A1:T23",col_names = TRUE)%>% 
 #dplyr::select(-9,-11)%>% 
   mutate(sex=if_else(sex=="Male",1,2),pregnant=if_else(lifestage=="Pregnancy",1,0),lactating=if_else(lifestage=="Lactation",1,0))%>%
   dplyr::rename(agemin=age_lower_yrs,agemax=age_upper_yrs,calcium_rda_IOM=calcium_rda,calcium_ear_IOM=calcium_ear,
@@ -1216,7 +1216,7 @@ Summary Tables for Reference Weights and Heights and Adult Equivalents
 
 options(digits=3,knitr.kable.NA = '')
 
-setwd("D:/SP21/BIHSgit/BIHS_Project/Programs/R/output")
+setwd("/Users/juli/Desktop/BIHS/master/BIHS_Project/Programs/R/output")
 #task: cannot find the vcode in w.I.roster.2015
 #compare reference weights by age group
 allref=w.I.roster.2015%>%
@@ -1349,7 +1349,7 @@ rm(allref,w,ref_wtht,a,h,w)
 12. Individual inadequacy by comparing actual consumption to target (by nutrient)
 ```{r nutrient Inadequacy}
 
-setwd("D:/SP21/BIHSgit/BIHS_Project/Programs/R/output")
+setwd("/Users/juli/Desktop/BIHS/master/BIHS_Project/Programs/R/output")
 
 #######NUTRIENTS
 #allocate share of total hh nutrient to each individual and separate into nutrient-specific tables
@@ -1432,8 +1432,8 @@ lnt=c("dashed","dotted","dashed","dashed","solid","solid")
 #task:cannot print; Error: Faceting variables must have at least one value
 kcalf_m=ggplot()+geom_path(data=subset(graph_kcal_f,sex==1),aes(x=factor(age_range),y=value,group=sourceref,color=sourceref,linetype=sourceref),size=1)+scale_color_manual(breaks=wha,values=clr,name="Reference Source and Level",labels=lbl)+scale_linetype_manual(breaks=wha,values=lnt,labels=lbl,name="Reference Source and Level")+
   scale_y_continuous(name="Energy inadequacy % ",limits=c(0,100),breaks=seq(0,100,10),expand=c(0,0))+scale_x_discrete(name="Age Group",breaks=unique(graph_allref$age_range),labels=x.label)+facet_grid(cols=vars(factor(variable)))+theme(legend.position=c(0.5,0.4),legend.background=element_rect(size=0.5,color="black"),panel.background = element_blank(),axis.line = element_line(color="black"))
-#print(kcalf_m)
-#ggsave("kf_plot_m.png")
+print(kcalf_m)
+ggsave("kf_plot_m.png")
 
 
 kcalf_w=ggplot()+geom_path(data=subset(graph_kcal_f,sex==2),aes(x=factor(age_range),y=value,group=sourceref,color=sourceref,linetype=sourceref),size=1)+scale_color_manual(breaks=wha,values=clr,name="Reference Source and Level",labels=lbl)+scale_linetype_manual(breaks=wha,values=lnt,labels=lbl,name="Reference Source and Level")+
@@ -1695,7 +1695,7 @@ print(carb_print)
 13. Individual inadequacy by comparing actual consumption to target (BY REFERENCE SOURCE)
 ```{r I_indequality}
 
-setwd("D:/SP21/BIHSgit/BIHS_Project/Programs/R/output")
+setwd("/Users/juli/Desktop/BIHS/master/BIHS_Project/Programs/R/output")
 
 
 
