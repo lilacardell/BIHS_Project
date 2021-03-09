@@ -1107,5 +1107,30 @@ rm(h,hh,i)
 ```
 
 
+```{r}
+selected_y6a = y6a_female_2015%>%
+  dplyr::select("a01", "hh_type","y6a_01","y6a_02","y6a_03", "y6a_04_1","y6a_04_2","y6a_04_3")%>%
+  pivot_longer(cols = y6a_04_1:y6a_04_3, names_to = "y6a_04",values_drop_na = TRUE)%>%
+  dplyr::select(-y6a_04)%>%
+  dplyr::rename(y6a_04=value)
+selected_y6a$clinic_access = ifelse((selected_y6a$y6a_02 == 999), 0, 1)
+```
 
+
+```{r}
+selected_y8 = y8_female_2015%>%
+  dplyr::select("a01", "hh_type","y8_01","y8_03","y8_04",contains("y8_05"),"y8_06",contains("y8_07"))%>%
+  pivot_longer(cols = y8_05_1:y8_05_6, names_to = "y8_05",values_drop_na = TRUE)%>%
+  dplyr::select(-y8_05)%>%
+  dplyr::rename(y8_05=value)%>%
+  pivot_longer(cols = y8_07_1:y8_07_6, names_to = "y8_07",values_drop_na = TRUE)%>%
+  dplyr::select(-y8_07)%>%
+  dplyr::rename(y8_07=value)
+```
+
+
+```{r}
+library(foreign)
+w.I.roster.2015 <- read.dta("~/Desktop/BIHS/master/BIHS_Project/Data/Output/w.I.roster.2015.dta")
+```
 
