@@ -1,0 +1,880 @@
+---
+title: "BIHS_explore"
+author: "Lila Cardell"
+date: "October 24, 2019"
+output: pdf_document
+#fontsize: 11pt
+
+#bibliography: nutrition.bibtex
+---
+
+Set working directory and install packages
+```{r setup, include=FALSE}
+
+
+knitr::opts_chunk$set(echo = FALSE,root.dir='C:/Users/lilac2/Box/BIHS Project',warning = FALSE, message=FALSE)
+options(scipen=999)
+set.seed(12345)
+###  Check for and load Packages   ###
+
+## Clear worksace
+rm(list = ls())
+gc()
+
+## This function will check if a package is installed, and if not, install it
+pkgTest  =  function(x) {
+  if (!require(x, character.only = TRUE))
+  {
+    install.packages(x, dep = TRUE)
+    if(!require(x, character.only = TRUE)) stop("Package not found")
+  }
+}
+
+## These lines load the required packages
+packages  =  c('data.table','tidyverse','haven','stargazer','plm','lubridate','survey','psych','knitr','xtable','tables','kableExtra','fuzzyjoin','MASS','matrixcalc','car','stringr','styler','readxl','magrittr','sjmisc','readxl','xlsx') ## you can add more packages here
+lapply(packages, pkgTest)
+
+```
+
+
+
+1. Import BIHS data
+```{r import BIHS data,results='hide'}
+# Read in data for project
+
+setwd("C:/Users/lilac2/Box/BIHS Project/Data")
+
+#this pulls in all 2011 household level files except the WEAI
+filenames<-grep(list.files(path="./Raw Data/bihs_2011_2012/household/data"),pattern=c("weai","h"),inv=TRUE,value=TRUE)
+names<-gsub(".dta","",filenames)
+
+ for(i in names){
+   filepath <- file.path(paste("./Raw Data/bihs_2011_2012/household/data/",i,".dta",sep=""))
+   assign(paste(substring(i,9),"_2011",sep=""),haven::read_dta(filepath))
+ }
+
+
+#read in the 2011 census and 2015 consumption file for now
+#census_2011 = read_dta("./Raw Data/bihs_2011_2012/census/data/001_census_ftf.dta")
+
+x1_1_f_2015 = read_dta("./Raw Data/bihs_2015/household/data/064_r2_mod_x1_1_female.dta")
+
+
+
+
+#import names of menu items from the 2015 codebook
+#this is assumed to be more comprehensize than 2011 and also available in excel
+menucodes = read_excel("./Raw Data/bihs_2015/household/documents/000_codebook.xls", 
+                       sheet = "064_r2_mod_x1_1_female", range = "C31:D415",col_names = c("menuname","menu"))
+
+
+#count menu items
+menu_items = aggregate(a01~menu, data=x1_female_2011, FUN = length)%>%
+  left_join(menucodes,by=c("menu"))%>%
+dplyr::rename("menucode"="menu","hh_num" = "a01")%>%
+  arrange(desc(hh_num))
+#206 items consumed in 2011
+#issue with salt not being separated into iodine/non-iodine in 2011
+#menu_items = aggregate(a01~x1_05, data=x1_1_f_2015, FUN = length) #180 items consumed in 2015
+#1/3 salt is regular, 2/3 iodine (return to this later)
+
+
+###import names of ingredient items from 2015 (assumed to be more comprehensize than 2011)
+ingredientcodes = read_excel("./Raw Data/bihs_2015/household/documents/000_codebook.xls", 
+                             sheet = "064_r2_mod_x1_1_female", range = "C417:D717", col_names =c("ingredientname","ingredient"))%>%
+ add_row(ingredientname="Salt",ingredient=252)
+
+occupationcodes=read_excel("./Raw Data/bihs_2015/household/documents/000_codebook.xls", 
+                             sheet ="003_r2_male_mod_b1", range = "C106:D182", col_names = c("occupation_name","occupation_code"))
+
+
+
+
+rm(filenames,filepath,i,names,x1_1_f_2015)
+
+```
+
+2. Import FCT Data
+```{r import FCT Data,results='hide'}
+
+setwd("C:/Users/lilac2/Box/BIHS Project/Data")
+###Import nutrition data
+FCT_bangladesh =read_excel("./Clean Data/Nutrient Table/FCDB_7_4_14_LC.xlsx",sheet = "UserDB_Main_table")
+
+#drop extra rows of nutrient data and select/rename/convert variables
+nutrients = left_join(ingredientcodes,FCT_bangladesh,by=c("ingredient"="BIHS_code")) %>%
+  dplyr::rename(foodname_english=4,foodname_bengali=5,edible=8,kcal=9,water=11,protein=12,fat=13,carb=14,calcium=17,iron=18)%>% 
+  dplyr::select(2,1,4,8:9,11:14,17,18)%>% 
+ mutate_at(vars(4:11),as.numeric,na.omit=TRUE)
+ 
+rm(FCT_bangladesh)
+```
+
+
+3. Calculate calories for each recipe
+```{r calculate recipe calories}
+ 
+#join recipe dataset with menucodes to include menu names
+x1_f_2011_m = left_join(x1_female_2011,menucodes,by=c("menu"))%>%
+  mutate(date=as_date(paste(x1_yy, x1_mm, x1_dd,sep="-")))%>%
+  dplyr::rename(rid=x1_rid,time=x1_03,menucode=menu,foodsource=x1_02,menucookwt=cwgt)%>%
+  dplyr::select(1,41,6,43,8,7,9,42,12,contains("x1_07"),contains("x1_08"))%>%
+  filter(!menucode %in% c(252,2521,2522))
+
+#rename variables with ingredient codes and weights to help with reshaping dataset 
+names(x1_f_2011_m)<-gsub("x1_07","icode",names(x1_f_2011_m))
+names(x1_f_2011_m)<-gsub("x1_08","iweight",names(x1_f_2011_m))
+names(x1_f_2011_m)<-gsub("_0","_",names(x1_f_2011_m))
+
+
+#reshape the recipe dataset to join it with the nutrient dataset
+#edit codes ingredients which have two BIHS codes, but are the same thing
+
+nutnames=names(dplyr::select(nutrients,5,7:11))
+
+recipes=melt(setDT(x1_f_2011_m),measure.vars=patterns("icode","iweight"),variable.name="inumber",value.name=c("icode","iweight"))%>%
+  arrange(a01,date,time,menucode)%>%
+  filter(is.finite(icode))%>%
+  mutate(icode=recode(icode,"233=232;90=80;193=181;187=186;32=258;47=46;267=162;188=189;211=179;25=157;204=179;238=189;229=228;126=123;111=88;2521=252;2522=252;41=249"))%>%
+  mutate(icode=as.numeric(icode))%>%
+  left_join(nutrients,by=c("icode"="ingredient"))
+
+#calculate the specific per gram nutrient input of each ingredient: nutrient_c = (ingredient weight in grams x nutrientval per 100g)/100
+for (x in nutnames){
+ recipes[[paste(x,"c",sep="_")]]<-recipes[[x]]*recipes$iweight/100
+}
+
+# #the below code worked for recoding over strings/variables, but I no longer needed it after I melted wide into long but wanted to save it for future
+# namesx = names(dplyr::select(x1_f_2011_m,starts_with("x1_07_")))
+# 
+# for(i in namesx){
+# x1_f_2011_m[[i]] = recode(x1_f_2011_m[[i]],"233=232;90=80;193=181;187=186;32=258;47=46;267=162;188=189;211=179;25=157;204=179;238=189;229=228;126=123;111=88;2521=252;2522=252")
+# }
+
+
+#investigate ingredients that are missing nutrient info
+missing = recipes[is.na(recipes$kcal),]
+missing_ingredients = aggregate(a01~icode+ingredientname, data=missing, FUN = length) %>%
+  arrange(desc(a01))
+
+#sum nutrients over meal
+recipe_sum=recipes%>%
+  group_by(a01,sample_type,rid,date,time,foodsource,menucode,menuname,menucookwt)%>%
+  #filter(!is.na(kcal))%>%    #need to find these ingredients eventually
+ dplyr::summarise(sum_iweight=sum(iweight),sum_water=sum(water),sum_kcal=sum(kcal_c),sum_protein=sum(protein_c),sum_fat=sum(fat_c),sum_carb=sum(carb_c),sum_calcium=sum(calcium_c),sum_iron=sum(iron_c))
+
+
+#find the median per gram nutrient info for each meal and the IQR
+recipe_med=recipe_sum%>%
+  group_by(menucode,menuname)%>%
+  dplyr::summarise(med_kcal=median(sum_kcal/menucookwt,na.rm=TRUE),sd_kcal=sd(sum_kcal/menucookwt,na.rm=TRUE),
+                   med_protein=median(sum_protein/menucookwt,na.rm=TRUE),sd_protein=sd(sum_protein/menucookwt,na.rm=TRUE),
+                   med_fat=median(sum_fat/menucookwt,na.rm=TRUE),sd_fat=sd(sum_fat/menucookwt,na.rm=TRUE),
+                   med_carb=median(sum_carb/menucookwt,na.rm=TRUE),sd_carb=sd(sum_carb/menucookwt,na.rm=TRUE),
+                   med_calcium=median(sum_calcium/menucookwt,na.rm=TRUE),sd_calcium=sd(sum_calcium/menucookwt,na.rm=TRUE),
+                   med_iron=median(sum_iron/menucookwt,na.rm=TRUE),sd_iron=sd(sum_iron/menucookwt,na.rm=TRUE))%>%
+  filter_all(all_vars(!is.na(.)))
+
+for (x in nutnames){
+ recipe_med[[paste("min",x,sep="_")]]<-recipe_med[[paste("med",x,sep="_")]]-2*recipe_med[[paste("sd",x,sep="_")]]
+ recipe_med[[paste("max",x,sep="_")]]<-recipe_med[[paste("med",x,sep="_")]]+2*recipe_med[[paste("sd",x,sep="_")]]
+}
+
+
+
+#add the median per gram nutrient info back into the recipe set and replace missing items and items more/less than two sd from the mean
+recipe_hh=left_join(recipe_sum,recipe_med,by=c("menucode","menuname"))
+
+
+for (x in nutnames){
+recipe_hh[[paste("sum",x,sep="_")]]=if_else(recipe_hh[[paste("sum",x,sep="_")]]==0|
+                                    is.na(recipe_hh[[paste("sum",x,sep="_")]])| 
+                                    recipe_hh[[paste("sum",x,sep="_")]]>recipe_hh[[paste("max",x,sep="_")]]|
+                                    recipe_hh[[paste("sum",x,sep="_")]]<recipe_hh[[paste("min",x,sep="_")]],
+                                    recipe_hh[[paste("med",x,sep="_")]]*recipe_hh$menucookwt,
+                                    recipe_hh[[paste("sum",x,sep="_")]])
+}
+
+recipe_hh=recipe_hh%>%
+dplyr::select(1:17)
+
+
+rm(recipe_med,recipe_sum,recipes,menucodes,nutrients,missing,x1_female_2011,x1_f_2011_m,x,menu_items,ingredientcodes)
+```
+
+4. Calculate calories consumed by each individual
+```{r calculate individual calories,results='hide'}
+#integrate with individual consumption data set and create individual calorie consumption
+
+# #flag for individuals without consumption data
+# datacheck = x2_f_2011  %>%
+#   group_by(a01,x2_01) %>%
+#   summarise(mealdata = n())%>%
+#   filter(x2_01<100)%>%
+#   dplyr::rename(mid=x2_01)
+
+#join individual reported consumption with recipe nutrition information, and calculate individual nutrient consumption per meal item
+recipe_I = left_join(x2_female_2011,recipe_hh,by=c("a01","x2_meal"="time","x2_08"="menucode"))%>%
+  dplyr::rename(meal_time=x2_meal,mid=x2_01,mealtaken=x2_03,sex_guest=x2_04,age_guest=x2_05,type_guest=x2_06,menucode=x2_08,icookwt=x2_09,ilocale=x2_11,iorder=x2_12,
+                sample=sample_type.x)%>%
+   mutate(i_mealkcal=(icookwt/menucookwt)*sum_kcal,i_mealprotein=(icookwt/menucookwt)*sum_protein,i_mealfat=(icookwt/menucookwt)*sum_fat,
+          i_mealcarb=(icookwt/menucookwt)*sum_carb,i_mealcalcium=(icookwt/menucookwt)*sum_calcium,i_mealiron=(icookwt/menucookwt)*sum_iron)%>%
+  dplyr::select(-sample_type.y,-contains("sum_"))
+
+
+
+nutrition_2011_I = recipe_I %>%
+  group_by(a01, mid) %>%
+  filter(mealtaken==1)%>% #filter out if meal not taken
+  dplyr::summarise(mealdata=n(),I_kcal=sum(i_mealkcal,na.rm=TRUE),I_protein=sum(i_mealprotein,na.rm=TRUE),I_fat=sum(i_mealfat,na.rm=TRUE),
+                   I_carb=sum(i_mealcarb,na.rm=TRUE),I_calcium=sum(i_mealcalcium,na.rm=TRUE),I_iron=sum(i_mealiron,na.rm=TRUE))%>%
+  filter(mid<100) #filter out guests
+
+nrow(filter(nutrition_2011_I,I_kcal==0|is.na(I_kcal))) #94 without calorie info
+
+rm(recipe_I,recipe_hh)
+```
+
+
+****** Nutrition data comparison (TBD)
+```{r food data check}
+#There are multiple data sets to corroborate:
+# HH reports food purchase/produced/gifted within the last 7 days on o1_female
+# HH reports food group consumption over last 7 days on x3_female
+# HH reports consumption over prior 24 hours on x1_female
+
+
+#sevenday_items_o1 = aggregate(a01~o1_01, data=o1_female_2011, FUN = length) #295 items
+
+#sevenday_groups_x3 = 
+
+#oneday_items_x1 = 
+  
+
+
+```
+
+
+5. Calculate BMI
+```{r BMI calculation, include=FALSE,results='hide'}
+anthro_2011_I=w1_female_2011%>%
+mutate(BMI=w1_03/((w1_04/100)^2))%>%
+  mutate(BMI=na_if(BMI,0),pregnant=if_else(is.na(w1_01)|w1_01==2,0,1),lactating=if_else(is.na(w1_02)|w1_02==2,0,1))%>%
+ dplyr::rename(weight=w1_03,height=w1_04)%>%
+  dplyr::select(-starts_with("w1_"))
+  
+
+
+```
+
+6. Create Individual Roster
+```{r roster_I,results='hide'}
+
+###CREATE INDIVIDUAL ROSTER###
+#add BMI and nutrition consumption to individual roster_2011         
+roster_2011_I=left_join(b1_male_2011,anthro_2011_I,by=c("a01","mid","sample_type")) %>%
+  dplyr::rename(hhid=a01,sex=b1_01,age=b1_02,relation=b1_03,marital=b1_04,abroad=b1_05,literacy=b1_07,
+                    education=b1_08,occupation=b1_10,sampletype=sample_type) %>%
+  left_join(nutrition_2011_I,by=c("hhid"="a01","mid"))
+         
+ 
+nrow(filter(roster_2011_I,is.na(mealdata))) #1158 are missing mealdata
+roster_2011_I$mealdata[is.na(roster_2011_I$mealdata)] <- 0
+roster_2011_I$pregnant[is.na(roster_2011_I$pregnant)] <- 0
+roster_2011_I$lactating[is.na(roster_2011_I$lactating)] <- 0
+nrow(filter(roster_2011_I,is.na(BMI))) #4507 are missing BMI
+
+occupation_type = aggregate(mid~occupation, data=roster_2011_I, FUN = length) %>%
+  dplyr::rename(n_I=mid)%>%
+  left_join(occupationcodes,by=c("occupation"="occupation_code")) %>%
+  mutate(activity=if_else(occupation %in% c(1:11,15,22,25,29:30,32:36,54,58:71),"heavy",
+                          if_else(occupation %in% c(12:14,16:21,23:24,26:28,31,37:41,47,55:57,72),"moderate",
+                                  "light")))%>%
+  dplyr::select(1,3,2,4)
+
+write.xlsx(occupation_type,"occupation_category.xlsx")
+
+# add back activity level, count number of household members, and flag polygamous HH
+roster_2011_I = roster_2011_I %>%
+  left_join(occupation_type,by="occupation")%>%
+  dplyr::select(-n_I,-occupation_name)%>%
+  #filter(!relation %in% c(16)) %>%
+  group_by(hhid)%>%
+  mutate(hhsize=n(),
+         boy=if_else(age<18 & sex==1,1,0),
+         girl=if_else(age<18 & sex==2,1,0),
+         man=if_else(age>=18 & sex==1,1,0),
+         woman=if_else(age>=18 & sex==2,1,0),
+         adult=if_else(boy==0 & girl==0,1,0),
+         child=if_else(man==0 & woman==0,1,0),
+         otheradult=ifelse(relation>2 & adult==1,1,0),
+         porl=if_else(pregnant==1 | lactating==1,1,0),
+         spouseabroad=if_else(abroad==1 & relation==2,1,0))%>%
+  ungroup()%>%
+  group_by(hhid,relation)%>%
+  mutate(poly=if_else(n()>1 & relation==2,1,0)) %>%
+  ungroup()%>%
+  dplyr::select(-contains("b1"))
+
+nrow(filter(roster_2011_I,poly==1)) #30 individuals are duplicate partners (ie: 15 hh have two spouses)
+          
+rm(occupation_type,occupationcodes,anthro_2011_I,nutrition_2011_I)
+```
+
+7. Create Household, Household Head, and Spouse Rosters
+```{r roster_HH, echo=FALSE}
+
+###create household level roster_2011 and add AE by OECD definition
+roster_2011_hh = roster_2011_I %>%
+  group_by(hhid) %>%
+  dplyr::summarise(hhsize = n(), adult=sum(adult),child=sum(child), poly=max(poly),
+            boy=sum(boy),girl=sum(girl),otheradult=sum(otheradult),
+            porl_hh=sum(porl,na.rm=TRUE), spouseabroad_hh=sum(spouseabroad,na.rm=TRUE),
+            mealdata_hhmin=min(mealdata),hh_kcal=sum(I_kcal,na.rm=TRUE),hh_protein=sum(I_protein,na.rm=TRUE),hh_fat=sum(I_fat,na.rm=TRUE),
+            hh_carb=sum(I_carb,na.rm=TRUE),hh_calcium=sum(I_calcium,na.rm=TRUE),hh_iron=sum(I_iron,na.rm=TRUE),
+            sampletype=first(sampletype),) %>%
+  mutate(porl_hh=if_else(is.na(porl_hh),0,porl_hh),AE_OECD=1+0.7*(adult-1)+0.5*child)
+
+#6503 households
+
+#filter individual roster_2011 to create head and spouse roster_2011s
+roster_2011_head = filter(roster_2011_I,relation==1) %>%
+   mutate(agehead=age, sexhead=sex, 
+          maritalhead=marital,
+          abroadhead=if_else(abroad==1,1,0),
+          lithead=if_else(literacy==4,1,0),
+          noschoolhead=if_else(education==99,1,0),
+          secondschoolhead=if_else(education %in% c(10:12,22,33),1,0),
+          agworkhead=if_else(occupation %in% c(1,64:71),1,0),
+          BMIhead=BMI,I_kcalhead=I_kcal) %>%
+  dplyr::select(hhid,contains("head"))
+#6503 heads          
+          
+roster_2011_spouse = filter(roster_2011_I,relation==2) %>%
+            mutate(agespouse=age,sexspouse=sex,
+                   abroadspouse=if_else(abroad==1,1,0),
+                   litspouse=if_else(literacy==4,1,0),
+                   noschoolspouse=if_else(education==99,1,0),
+                   secondschoolspouse=if_else(education %in% c(10:12,22,33),1,0),
+                   agworkspouse=if_else(occupation %in% c(1,64:71),1,0),
+                   BMIspouse=BMI,I_kcalspouse=I_kcal)%>%
+  dplyr::select(hhid,ends_with("spouse"))
+#5225 spouses
+
+#add head and spouse characteristics back to household level roster_2011                   
+roster_2011_hh=full_join(roster_2011_hh,roster_2011_head,by="hhid") 
+roster_2011_hh=full_join(roster_2011_hh,roster_2011_spouse,by="hhid")
+#6518 households = 6503+15 additional spouses in poly hh
+
+
+
+dupe_hh = roster_2011_hh %>%
+  filter(sampletype==2 |sampletype==3)%>% 
+  group_by(hhid) %>% 
+  filter(n() > 1)#30 poly HH
+
+roster_2011_hh= distinct(roster_2011_hh,hhid, .keep_all= TRUE) #keeps only one line for each poly HH because HH level var are equivalent
+
+rm(roster_2011_head,roster_2011_spouse,dupe_hh)
+
+```
+
+8. Calculate village level prices and HH expenditures
+```{r expenditures, echo=FALSE,include=FALSE,results='hide'}
+
+villages = aggregate(a01~vcode_n, data=a_male_2011, FUN = length) #318 villages
+upazilla = aggregate(a01~uzcode, data=a_male_2011, FUN = length) #279 upazilla
+
+
+#calculate household level weekly food expenditure
+foodexp_2011 = left_join(o1_female_2011,a_male_2011,by="a01")%>%
+  dplyr::select(a01,contains("o1"),vcode_n,dcode)%>%
+  mutate(o1_07a=if_else(o1_04 %in% c(1,2,3),o1_08/o1_06,o1_08/o1_05)) #category 1 is kg, cat 2 is g, 3 is liter, and now 4 is g
+  #mutate(o1_06a=if_else(o1_04==2,o1_06/1000,o1_06), #change grams into kilos 
+        # o1_07a=if_else(o1_04==4,(o1_08/o1_05)/1000,o1_07))%>% #alternate unit price=total val/number of kg reported
+
+  
+missing_exp=foodexp_2011%>%
+  filter(is.na(o1_07a))
+
+#calculate village level prices: unit mean and unit median prices if there are more than 3 observations in the village for the food item
+# prices_village = o1_f_2011_hh%>%
+#   dplyr::select(vcode_n,dcode,o1_01,o1_04,o1_06,o1_07,o1_08)%>%
+#   arrange(dcode,vcode_n,o1_01,o1_04,o1_07)%>%
+#   group_by(o1_01,vcode_n) %>%
+#   filter(!is.na(o1_07))%>%
+#   dplyr::summarise(unitprice=ifelse(n()>3,mean(o1_07),0),medprice=ifelse(n()>3,median(o1_08/o1_06),0))%>%
+#   dplyr::na_if(0) #convert zero to NA
+
+prices=foodexp_2011%>%
+  dplyr::select(o1_01,o1_04,o1_06,o1_07,o1_07a,o1_08)%>%
+  #arrange(o1_01,o1_04)%>%
+  group_by(o1_01,o1_04) %>%
+dplyr::summarise(mp=median(o1_07a,na.rm=TRUE))
+
+  # filter(!is.na(o1_07))%>%
+  # dplyr::summarise(unitprice=ifelse(n()>3,mean(o1_07),0),medprice=ifelse(n()>3,median(o1_08/o1_06),0))%>%
+  # dplyr::na_if(0) #convert zero to NA
+
+#join food expenditures with village food prices
+foodexp_2011 = left_join(foodexp_2011,prices,by=c("o1_01","o1_04"))%>%
+  mutate(foodprod=mp*o1_10,foodother=mp*o1_11) %>%
+ dplyr::na_if(0) #convert zero to NA
+  
+foodexp_2011_hh = foodexp_2011%>%
+  group_by(a01) %>%
+  dplyr::summarise(foodpurch_hhwk=sum(o1_08,na.rm=TRUE),foodprod_hhwk=sum(foodprod,na.rm=TRUE),
+            foodother_hhwk=sum(foodother,na.rm=TRUE))%>%
+  mutate(foodtot_hhwk=rowSums(.[2:3],na.rm=TRUE)) #only include purch and prod
+
+
+#calculate household level weekly nonfood expenditure from monthly
+nonfoodexp_2011_m = p1_male_2011 %>%
+  group_by(a01) %>%
+  dplyr::summarise(p1_02=sum(p1_02,na.rm=TRUE),p1_04=sum(p1_04,na.rm=TRUE)) %>%
+  mutate(nonfoodexp1_hhwk=(p1_02+p1_04)*12/52) 
+
+#calculate household level weekly nonfood expenditure from annual
+nonfoodexp_2011_y = p2_male_2011 %>%
+  group_by(a01) %>%
+  dplyr::summarise(p2_03=sum(p2_03,na.rm=TRUE),p2_06=sum(p2_06,na.rm=TRUE)) %>%
+  mutate(nonfoodexp2_hhwk=(p2_03+p2_06)/52)    
+
+#combine all nonfood exp expenditures
+nonfoodexp_2011_hh=left_join(nonfoodexp_2011_m,nonfoodexp_2011_y,by="a01") %>%
+  mutate(nonfoodexp_hhwk=nonfoodexp1_hhwk + nonfoodexp2_hhwk) %>%
+  dplyr::select(a01,nonfoodexp_hhwk)
+
+
+
+#add food expenditures to household roster_2011
+roster_2011_hh=left_join(roster_2011_hh,nonfoodexp_2011_hh,by=c("hhid"="a01")) %>%
+  mutate(nonfoodexp_hhwk_pc=nonfoodexp_hhwk/hhsize,
+         nonfoodexp_hhwk_AE_OECD=nonfoodexp_hhwk/AE_OECD)%>%
+left_join(foodexp_2011_hh,by=c("hhid"="a01")) %>%
+  mutate(foodpurch_hhwk_pc = foodpurch_hhwk/hhsize,
+    foodpurch_hhwk_AE_OECD = foodpurch_hhwk/AE_OECD,
+    foodtot_hhwk_pc = foodtot_hhwk/hhsize,
+    foodtot_hhwk_AE_OECD = foodtot_hhwk/AE_OECD)%>%
+  mutate(foodshare=if_else(nonfoodexp_hhwk>0 & foodtot_hhwk>0,foodtot_hhwk/(foodtot_hhwk+nonfoodexp_hhwk),0))
+
+#dplyr::na_if(roster_2011_hh$foodshare,0) #convert zero to NA
+
+rm(nonfoodexp_m_hh,nonfoodexp_y_hh,upazilla,villages,prices,foodexp_2011,foodexp_2011_hh,nonfoodexp_2011_hh,nonfoodexp_2011_m,nonfoodexp_2011_y,missing_exp)
+
+```
+
+9. Food Security measures (hdds tbd)
+```{r food security, echo=FALSE}
+
+foodsecurity=x3_female_2011%>%
+  dplyr::rename(hhid=a01,nofood_freq=x3_02,hungrynight_freq=x3_04,hungryday_freq=x3_06)%>%
+  mutate(nofood=if_else(x3_01==1,1,0),hungrynight=if_else(x3_03==1,1,0),hungryday=if_else(x3_05==1,1,0))%>%
+  dplyr::select(hhid,contains("no"),contains("hungry"))
+
+# #need to finish HDDS %>%
+#   mutate(cereal=if_else(x3_07_1>0|x3_07_2>0|x3_07_4>0,1,0),
+#          tubers=if_else(x3_07_3==1,1,0),
+#          vegetables=if_else(x3_07_5==1,1,0),
+#          fruits=if_else(x3_07_6==1,1,0),
+#          meat=if_else(x3_07_10==1|x3_07_11==1,1,0),
+#          eggs=if_else(x3_07_8==1,1,0),
+#          seafood=if_else(x3_07_12==1,1,0),
+#          pulses=if_else(x3_07_7==1|x3_07_16==1,1,0),
+#          milk=if_else(x3_07_9==1,1,0),
+#          fats=if_else(x3_07_13==1,1,0),
+#          sugar=if_else(x3_07_14==1,1,0),
+#          misc=if_else(x3_07_15==1|x3_07_17==1,1,0))%>%
+#   mutate(hdds=)
+  
+#add back to HH level roster
+roster_2011_hh=left_join(roster_2011_hh,foodsecurity,by="hhid")
+
+
+rm(foodsecurity)
+
+```
+
+
+
+(tbd) Assistance Type
+```{r assistance, echo=FALSE}
+#breakdown of assistance type (for all households)
+# assistance = u_male_2011 %>%
+#   filter(u01==1) 
+# 
+# assistance_count = aggregate(a01~slno, data=assistance, FUN = length)
+
+# %>%
+#   group_by(a01)%>%
+#   summarise(u01_hh=n(mid_1)+n(mid_2))
+```
+
+Clean up global environment
+```{r}
+
+rm(list=ls(pattern="male")) 
+   
+```
+
+
+
+Descriptives
+D1. Summary of unweighted sample (6503 HH)
+```{r total sample, echo=FALSE}
+
+### SUMMARY of all 6503 households (ie: 15 hh dropped with two spouses)
+roster_2011_hh.summary = roster_2011_hh %>%
+    psych::describe() %>%
+  as_tibble(rownames="rowname") %>%
+  dplyr::select(rowname,n,mean,sd)
+
+#print(roster_2011_hh.summary,digits=3)
+
+```
+
+
+D2. Add survey weights and restrict to representative sample (5503 HH)
+```{r summary, echo=FALSE}
+sample_type = aggregate(hhid~sampletype, data=roster_2011_hh, FUN = length)
+#1:FTF Original 1000
+#2:FTF Additional 1080
+#3:National Representative 4423
+
+#import weights
+weights_2011 <- read_dta("C:/Users/lilac2/Box/BIHS Project/Data/Raw Data/bihs_2011_2012/IFPRI_BIHS_R1_expenditure.dta") %>%
+  dplyr::select(a01,dvcode,vcode,aeu,hhweightR1,popweightR1)
+
+#weights_2015 <- read_dta("C:/Users/lilac2/Box/BIHS Project/Data/Raw Data/bihs_2015/IFPRI_BIHS_R2_exp.dta")
+
+wroster_2011_hh=left_join(roster_2011_hh,weights_2011,by=c("hhid"="a01"))%>%
+  filter(sampletype==2 |sampletype==3)%>%
+  filter(poly==0)
+
+wroster_2011_I=left_join(roster_2011_I,weights_2011,by=c("hhid"="a01"))%>%
+  filter(sampletype==2 |sampletype==3)%>%
+  filter(I_kcal>0 & mealdata>0&poly==0 & age>=1)
+
+
+wroster_2011_hh.summary = wroster_2011_hh %>%
+    psych::describe() %>%
+  as_tibble(rownames="rowname") %>%
+  dplyr::select(rowname,n,mean,sd)
+
+
+rm(sample_type)
+
+```
+
+
+
+
+
+10. Add HH level variables back to individual roster (not yet?)
+```{r}
+# roster_2011_I2=left_join(roster_2011_I,roster_2011_hh,by="hhid")%>%
+#   dplyr::select(-contains(".y"))%>%
+#   rename_at(vars(contains(".x")),funs(str_replace(.,".x","")))
+
+```
+
+
+
+
+Import AE and Nutrient Requirements
+```{r nutrient requirements}
+
+setwd("C:/Users/lilac2/Box/BIHS Project/Data")
+
+wroster_2011_I=left_join(roster_2011_I,weights_2011,by=c("hhid"="a01"))%>%
+  filter(sampletype==2 |sampletype==3)%>%
+  filter(I_kcal>0 & mealdata>0&poly==0 & age>=1)
+
+#INDIA requirements and AE
+#read in D&T's version of adult equivalent from India
+AE_India <- read_excel("./Clean Data/GuidelinesIndia_2011.xlsx",sheet="AE_India",range = "A1:D13",col_types =  "numeric")
+
+
+#join AE
+wroster_2011_I=fuzzy_left_join(wroster_2011_I,AE_India, 
+                by=c("age"="agemin", "age"="agemax"),
+                match_fun=list(`>=`, `<=`))%>%
+  mutate(AE_India=if_else(sex==1,AE_male,AE_female))%>%
+  dplyr::select(-(41:44))
+
+
+#India Dietary requirements
+India_RDA<-read_excel("./Clean Data/GuidelinesIndia_2011.xlsx",sheet="India_RDA",range = "A1:k19",col_names = TRUE)%>%
+  mutate(sex=if_else(sex=="male",1,2),agemin=as.numeric(agemin),agemax=as.numeric(agemax),
+         activity=if_else(is.na(activity),"light",activity))%>%
+  dplyr::select(-1)
+
+
+#join India requirements
+wroster_2011_I=wroster_2011_I%>%
+  mutate(activityI=if_else(age>=18,activity,"light"))%>%
+  fuzzy_left_join(India_RDA,
+                by=c("sex","activityI"="activity","age"="agemin", "age"="agemax"),
+                match_fun=list(`==`,`==`,`>=`, `<=`))%>%
+   dplyr::rename(activity=activity.x,sex=sex.x)%>%
+  dplyr::select(-contains(".y"),weight_kg,-agemin,-agemax)%>%
+  mutate(kcal_india=if_else(pregnant==1,kcal_india+250,if_else(lactating==1,kcal_india+560,kcal_india)),
+         protein_india=if_else(pregnant==1,protein_india+23,if_else(lactating==1,protein_india+16,protein_india)))
+
+rm(AE_India,India_RDA)
+
+
+#FAO requirements and AE
+#read in FAO AME
+AE_FAO <- read_excel("./Clean Data/FAO_energyrequirements_2011.xlsx",sheet="AME_FAO",range = "A1:F22",col_names=TRUE,col_types = "numeric")
+
+#join AE
+wroster_2011_I=fuzzy_left_join(wroster_2011_I,AE_FAO, 
+                by=c("age"="agemin", "age"="agemax"),
+                match_fun=list(`>=`, `<=`))%>%
+  mutate(AE_FAO=if_else(sex==1,AME_male,if_else(sex==2&pregnant==0&lactating==0,AME_female,
+                                               if_else(sex==2&pregnant==1,AME_pregnant,
+                                                       if_else(sex==2&lactating==1,AME_lactating,as.numeric(NA))))))%>%
+  dplyr::select(-(49:54))
+
+#read in how to calculcate energy requirements for each individual
+FAO_BMR <- read_excel("C:/Users/lilac2/Box/BIHS Project/Data/Clean Data/FAO_energyrequirements_2011.xlsx",sheet="BMR_PAL",range = "A1:H13",col_names = TRUE)%>% 
+  dplyr::select(1,2,6,7)%>% 
+  mutate(sex=if_else(sex=="Male",1,2))%>% 
+  dplyr::rename(agegrp_FAO=age)
+
+FAO_PAL <-read_excel("C:/Users/lilac2/Box/BIHS Project/Data/Clean Data/FAO_energyrequirements_2011.xlsx",sheet="BMR_PAL",range = "M1:P4",col_names = TRUE)
+
+#nutrition subset for individuals
+#calculate BMR and FAO daily energy requirement=BMR x PAL, add 285 kcal/d for pregnancy, and 500 kcal/day if breastfeeding
+nutrition_2011_I=wroster_2011_I%>%
+ dplyr::select(1:24,36:40)%>%
+mutate(sex=as.numeric(sex),agegrp_FAO=if_else(age>=60,"60-150",if_else(age>=30 & age<60,"30-60",if_else(age>=18 & age<30,"18-30",if_else(age>=10 & age<18,"10-18",if_else(age>=3 & age<10,"3-10",if_else(age>=0 & age<3,"0-3",as.character(NA))))))))%>%
+  left_join(FAO_BMR,by=c("agegrp_FAO","sex"))%>%
+  mutate(BMR_kcal=(weight*BMR_KCd1)+BMR_KCd2)%>%
+  dplyr::select(-BMR_KCd1,-BMR_KCd2)%>%
+  left_join(FAO_PAL,by="activity")%>%
+  mutate(kcal_FAO_PAL=BMR_kcal*SF_PAL)%>%
+  mutate(kcal_FAO_PAL_pl=if_else(pregnant==1,kcal_FAO_PAL+285,if_else(lactating==1,kcal_FAO_PAL+485,kcal_FAO_PAL)))%>%
+  dplyr::select(-PAL_value,-midpoint_PAL,-SF_PAL)
+
+kcal_grp=nutrition_2011_I%>%
+  group_by(agegrp_FAO,sex)%>%
+  dplyr::summarise(kcal_grp=mean(kcal_FAO_PAL_pl,na.rm=TRUE))
+
+
+
+
+
+
+
+
+
+
+#calculate nutrient per AE (old OECD definition) and per capita for the household (alternate options?) 
+
+namesx = names(dplyr::select(roster_2011_hh,starts_with("hh_")))
+
+for(i in namesx){
+roster_2011_hh[[paste(i,"PC",sep="_")]]<-roster_2011_hh[[i]]/roster_2011_hh$hhsize
+roster_2011_hh[[paste(i,"AE_hh",sep="_")]]<-roster_2011_hh[[i]]/roster_2011_hh$AE_hh
+
+}
+
+```
+
+
+Summary Table for D&T
+```{r DT, echo=FALSE}
+
+
+### SUMMARY TABLES FOR D&T SUBSET
+# "we restrict the sample to households with male, married heads whose spouses are present and to
+# households without pregnant or lactating women. This sample of 3,060 house-holds..." (page 631)
+
+##DST TABLE 1
+roster_hh_DST = wroster_2011_hh %>%
+  filter(sexhead==1 & maritalhead==2 & abroadhead==0 & poly==0 & porl_hh==0 & spouseabroad_hh==0) 
+
+#nrow(filter(roster_hh_DST,is.na(BMIhead))) #86 missing
+#nrow(filter(roster_hh_DST,is.na(BMIspouse))) #45 missing
+
+design_hh_DT <- svydesign(data=roster_hh_DST,id=~vcode, strata=~dvcode,weights=~hhweightR1)
+
+listx = dplyr::select(roster_hh_DST,22,53,63,66,2,19,20,6,7,8,33,37:42,43,46:51)
+a=svymean(listx,design_hh_DT,na.rm=TRUE)
+print(ftable(a),digits=2)
+
+#this is not weighted, use svymean for weighted results
+roster_hh_DST.summary = roster_hh_DST %>%
+  psych::describe() %>%
+  as_tibble(rownames="rowname") %>%
+  dplyr::select(rowname,n,mean,sd)
+
+#print(roster_hh_DST.summary,digits=3)
+# 
+# table1= dplyr::bind_cols(roster_2011_hh.summary,roster_hh_DST.summary) %>%
+#   dplyr::select(-rowname1)%>%
+#   dplyr::rename(obs_full=n,mean_full=mean,sd_full=sd,obs_sample=n1,mean_sample=mean1,sd_sample=sd1) %>%
+#   dplyr::filter(rowname=="hhdaycalperAE" |rowname=="hhdayecalperAE" | rowname=="nonfoodexp_hhwkpc" | rowname=="foodpurch_hhwkpc" | rowname=="foodshare" | rowname=="hhsize" | rowname=="AE" | rowname=="boy" | rowname=="girl" | rowname=="otheradult"
+#                 | rowname=="agehead" |rowname=="lithead" |rowname=="noschoolhead" |rowname=="secondschoolhead" |rowname=="agworkhead" |rowname=="BMIhead"
+#                 | rowname=="agespouse" |rowname=="litspouse" |rowname=="noschoolspouse" |rowname=="secondschoolspouse" |rowname=="agworkspouse" |rowname=="BMIspouse") 
+# 
+# 
+# kable(table1,booktabs=TRUE,digits=2,caption="Table 1", col.names=c("Variable","N","Mean","SD","N","Mean","SD"),align='r')%>%
+#   kable_styling(full_width=TRUE)%>%
+#   pack_rows("Household Head",8,13)%>%
+#   pack_rows("Spouse",14,19)%>%
+#   pack_rows("Expenditures",20,22)%>%
+#   add_header_above(c(" "=1,"All Households"=3,"D&T Sample"=3))
+# 
+
+###TABLE 3
+roster_I_DST=wroster_2011_I%>%
+  filter(sexhead==1 & maritalhead==2 & abroadhead==0 & poly==0 & porl_hh==0 & spouseabroad_hh==0)%>%
+  mutate(BMIunder=if_else(BMI<18.5,(18.5-BMI)/18.5,0),
+         adultgrp=if_else(relation==1,"head",if_else(relation==2,"spouse",if_else(otheradult==1,"otheradult",as.character(NA)))))%>%
+   filter(!is.na(agegrp_DST),!is.na(BMI),!is.na(adultgrp))%>%
+  dplyr::select(hhid,mid,agegrp_DST,adultgrp,BMI,BMIunder,vcode,dvcode,popweightR1)
+
+#%>%
+ # reshape2::cast(agegrp~adultgrp,fun.aggregate=c(mean,sd,n))
+
+#roster_I_DST$DST[is.na(roster_I_DST$DST)]<-0 #convert zero to NA
+design_I_DT <- svydesign(data=roster_I_DST,id=~vcode, strata=~dvcode,weights=~popweightR1)
+
+table3= roster_I_DST %>%
+  group_by(agegrp_DST,adultgrp) %>%
+  summarise(mean=mean(BMIunder),se=sd(BMIunder)/sqrt(length(BMIunder)),n=n())%>%
+  reshape2::melt(id.vars=c("agegrp_DST","adultgrp"),measure.var=c("mean","se","n"))%>%
+  dplyr::arrange(agegrp_DST)%>%
+  unite(agegrp_DST,variable,col="agegrp_DST_var",sep="_")%>%
+  dcast(agegrp_DST_var~adultgrp,value.var = "value")%>%
+  separate(agegrp_DST_var,into=c("agegrp_DST","var"),"_")%>%
+  dplyr::select(var,head,spouse,otheradult)
+# 
+# 
+# kable(table3,booktabs=TRUE,digits=3,caption="Table 3: BMI Shortfalls", col.names=c("","Heads","Spouses","Other Adults"),align='r')%>%
+#   kable_styling(full_width=TRUE)%>%
+#   pack_rows("Ages 20-39",1,3)%>%
+#   pack_rows("Ages 40-59",4,6)%>%
+#   pack_rows("Ages 60 and up",7,9)
+
+#%>%
+ # add_header_above(c(" "=1,"All Households"=3,"D&T Sample"=3))
+
+
+```
+
+
+METHODOLOGY
+Nutrient = calories, fat, protein, carb, calcium,iron
+1. Individual consumption of nutrients (Six variables labeled "I_nutrient")
+2. BMI (one variable labeled "BMI")
+3. HDDS (not yet done)
+
+Calculated measure = Total household consumption of nutrient/measure of household size
+
+Variation in Denominator:
+a.	HH size (PC)
+b.	OECD adult equivalent 
+c.	AE based on age group and gender
+d.  AE accounting for pregnancy/lactation
+e.	AE based on age
+f.	Add on activity as defined by employment category 
+g.	Add on activity as defined by time use
+h.	AE using height and weight 
+i.	Adult Male Equivalent (is this different than AE?) 
+j.	AE benchmarks from Bangladesh./India
+k.	AE benchmarks from FAO
+l.	AE benchmarks from USDA
+
+
+12. Variations on Denominator
+```{r limiteddata}
+#a. HH size (PC) was calculated in section 6 as "nutrient_pc" and total for HH is "hh_nutrient"
+#b. AE_hh was calculated in section 6 as "nutrient_AE_hh" and total for HH is "hh_nutrient"
+#for the rest, it makes sense to calculate by most specific and then summarise
+
+# energy requirement using age group, gender, pregnancy and lactation, and activity by employment category 
+
+  
+
+```
+
+
+DRI/WHO standards Schenider Hertforth (2020)
+```{r Kate}
+
+#WHO/DRI standards from Schenider/Hertforth
+who_standards = read_dta("C:/Users/lilac2/Box/BIHS Project/Programs/Stata/EAR+UL+AMDR+CDDR+BF_WHOgrowthref_allgroups.dta")%>%
+mutate(sex=if_else(age_sex_grp%in%c(4,6,8:13),1,if_else(age_sex_grp%in%c(5,7,14:25),2,as.numeric(NA))),
+         agegrp_who=if_else(lifestage==4,"infant",if_else(lifestage==3,"child",if_else(lifestage==1,"adolescent",if_else(lifestage==2,"adult",
+                             if_else(lifestage==6,"senior",if_else(lifestage==5,"lactating",if_else(lifestage==7,"pregnant",as.character(NA)))))))))%>%
+  filter(nutr_no %in%c(2,3,4,5,16,18))%>%
+dplyr::mutate(nutr=revalue(nutr,c("Energy"="kcal","Carbohydrate"="carb","Protein"="protein","Lipids"="fat","Calcium"="calcium","Iron"="iron")))
+
+who_split=split(who_standards,who_standards$nutr)
+who_names=names(who_split)
+for (i in 1:length(who_names)) {
+  y=who_split[[i]]
+  assign(paste("who",who_names[i],sep="_"), y)
+  x=nutrition_I_LC%>%dplyr::select(1:29,contains(who_names[i]))%>%left_join(y,by=c("agegrp_who","sex"))
+  assign(paste("nutrition",who_names[i],sep="_"),x)
+}
+
+
+
+
+ wroster_2011_I_LC[[paste(x,"gap_PC_I",sep="_")]]<-(wroster_2011_I_LC[[paste("hh_",x,"_PC")]] - wroster_2011_I_LC[[x]]) / wroster_2011_I_LC[[paste("hh_",x,"_PC")]]
+ 
+
+
+ rm(new_names,who_split)
+
+```
+
+
+Energy gaps
+```{r}
+who_kcal=who_standards%>%
+  
+    mutate(kcal_PAL_pl_gap_hh=(kcal_PAL_pl_hh-hh_kcal)/kcal_PAL_pl_hh,BMI_gap_I=(18.5-BMI)/18.5,kcal_gap_PC_I=(hh_kcal_PC-I_kcal)/hh_kcal_PC, 
+          kcal_gap_AE_I=(hh_kcal_AE_hh-I_kcal)/hh_kcal_AE_hh, 
+           kcal_PAL_pl_gap_I=(kcal_PAL_pl-I_kcal)/kcal_PAL_pl,
+                    kcal_gap_I=(kcal_india-I_kcal)/kcal_india,
+           protein_gap_I=(protein_india-I_protein)/protein_india,
+           fat_gap_I=(fat_india-I_fat)/fat_india,
+           calcium_gap_I=(calcium_india-I_calcium)/calcium_india,
+          iron_gap_I=(iron_india-I_iron)/iron_india)
+           
+
+for (x in nutnames){
+ wroster_2011_I_LC[[paste(x,"gap_PC_I",sep="_")]]<-(wroster_2011_I_LC[[paste("hh_",x,"_PC")]] - wroster_2011_I_LC[[x]]) / wroster_2011_I_LC[[paste("hh_",x,"_PC")]]
+ 
+}
+          
+
+#missing=wroster_2011_I_LC%>%
+ # filter(is.na(cal_gap_I))
+# 
+# for (x in nutnames){
+#   inequality_x=wroster_2011_I_LC%>%
+#   group_by(agegrp_FAO,sex)%>%
+#   dplyr::summarise([[paste(x,"_gap_I",sep="")]]=mean(energy_gap_I,na.rm=T),cal_gap_I=mean(cal_gap_I,na.rm=T),cal_gap_PC=mean(cal_gap_PC_I,na.rm=T),
+#             cal_gap_AE=mean(cal_gap_AE_I,na.rm=T),BMI_gap_I=mean(BMI_gap_I,na.rm=T))
+#   
+#  recipe_med[[paste("min",x,sep="_")]]<-recipe_med[[paste("med",x,sep="_")]]-2*recipe_med[[paste("sd",x,sep="_")]]
+#  recipe_med[[paste("max",x,sep="_")]]<-recipe_med[[paste("med",x,sep="_")]]+2*recipe_med[[paste("sd",x,sep="_")]]
+# }
+
+
+
+inequality_bygroup=wroster_2011_I_LC%>%
+  group_by(agegrp_FAO,sex)%>%
+  dplyr::summarise(kcal_gap_I=mean(kcal_gap_I,na.rm=T),kcal_gap_I=mean(kcal_gap_I,na.rm=T),kcal_gap_PC=mean(kcal_gap_PC_I,na.rm=T),
+            kcal_gap_AE=mean(kcal_gap_AE_I,na.rm=T),BMI_gap_I=mean(BMI_gap_I,na.rm=T))
+
+print(inequality_bygroup,digits=2)
+```
+
