@@ -243,7 +243,7 @@ rm(allref,w,ref_wtht,a,h,w,graph_allref)
 3. Individual calorie inadequacy by comparing actual consumption to target
 ```{r nutrient Inadequacy}
 
-setwd("C:/Users/lilac2/Box/BIHS_Project/Programs/R/output")
+setwd("C:/Users/lilac2/Box/BIHS_Project")
 
 nutnames=c("kcal","protein","fat","carb","calcium","iron") 
 
