@@ -279,6 +279,7 @@ rm(recipe_med,recipe_sum,recipes,menucodes,nutrients,missing,x1_female_2015,x1_f
 4. Calculate calories consumed by each individual
 ```{r calculate individual calories,results='hide'}
 #integrate with individual consumption data set and create individual calorie consumption
+#there are issues with missing consumption (172 people) and inflated calories counts
 
 # #flag for individuals without consumption data
 # datacheck = x2_f_2015  %>%
@@ -314,6 +315,7 @@ nutrition_2015_I = recipe_I%>%
 nrow(filter(nutrition_2015_I,I_kcal==0|is.na(I_kcal))) #172 without calorie info
 
 rm(recipe_I,recipe_hh)
+
 
 ```
 
@@ -992,7 +994,7 @@ Import IOM height weight and Nutrient Requirements
 setwd("C:/Users/lilac2/Box/BIHS_Project")
 #setwd("/Users/juli/Desktop/BIHS/master/BIHS_Project")
 
-#library(plyr)
+library(plyr)
 
 #DRI standards
 #energy requirements
@@ -1376,8 +1378,10 @@ rm(list=ls(pattern="male"))
 Save household and individual rosters for analysis
 ```{r save, echo=FALSE}
 
-write.csv(w.I.roster.2015,"./rosters/w.I.roster_2015.csv",row.names=FALSE)
+setwd("C:/Users/lilac2/Box/BIHS_Project")
 
-write.csv(w.hh.roster.2015,"./rosters/w.hh.roster_2015.csv",row.names=FALSE)
+write.csv(w.I.roster.2015,"./Programs/R/rosters/w.I.roster_2015.csv",row.names=FALSE)
+
+write.csv(w.hh.roster.2015,"./Programs/R/rosters/w.hh.roster_2015.csv",row.names=FALSE)
 ```
 
