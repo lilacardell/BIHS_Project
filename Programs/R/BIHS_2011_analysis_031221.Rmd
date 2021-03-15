@@ -304,15 +304,14 @@ clr=c("green","blue","blue","red","blue","red")
 lnt=c("dashed","dotted","dashed","dashed","solid","solid")
 
 
+kcalf_m=ggplot()+geom_path(data=subset(graph_kcal_f,sex=="Male"),aes(x=factor(age_range),y=value,group=sourceref,color=sourceref,linetype=sourceref),size=1)+scale_color_manual(breaks=wha,values=clr,name="Reference Source and Level",labels=lbl)+scale_linetype_manual(breaks=wha,values=lnt,labels=lbl,name="Reference Source and Level")+scale_y_continuous(name="Energy inadequacy % ",limits=c(0,100),breaks=seq(0,100,10),expand=c(0,0))+scale_x_discrete(name="Age Group",breaks=unique(graph_kcal_f$age_range),labels=x.label)+facet_grid(cols=vars(factor(variable)))+theme(legend.position=c(0.5,0.4),legend.background=element_rect(size=0.5,color="black"),panel.background = element_blank(),axis.line = element_line(color="black"))
+print(kcalf_m)
+ggsave("./Programs/R/output/2011/kf_plot_m.png")
 
-kcalf_m=ggplot()+geom_path(data=subset(graph_kcal_f,sex==1),aes(x=factor(age_range),y=value,group=sourceref,color=sourceref,linetype=sourceref),size=1)+scale_color_manual(breaks=wha,values=clr,name="Reference Source and Level",labels=lbl)+scale_linetype_manual(breaks=wha,values=lnt,labels=lbl,name="Reference Source and Level")+scale_y_continuous(name="Energy inadequacy % ",limits=c(0,100),breaks=seq(0,100,10),expand=c(0,0))+scale_x_discrete(name="Age Group",breaks=unique(graph_kcal_f$age_range),labels=x.label)+facet_grid(cols=vars(factor(variable)))+theme(legend.position=c(0.5,0.4),legend.background=element_rect(size=0.5,color="black"),panel.background = element_blank(),axis.line = element_line(color="black"))
-#print(kcalf_m)
-#ggsave("./Programs/R/output/2011/kf_plot_m.png")
 
-
-kcalf_w=ggplot()+geom_path(data=subset(graph_kcal_f,sex==2),aes(x=factor(age_range),y=value,group=sourceref,color=sourceref,linetype=sourceref),size=1)+scale_color_manual(breaks=wha,values=clr,name="Reference Source and Level",labels=lbl)+scale_linetype_manual(breaks=wha,values=lnt,labels=lbl,name="Reference Source and Level")+ scale_y_continuous(name="Energy inadequacy % ",limits=c(0,100),breaks=seq(0,100,10),expand=c(0,0))+scale_x_discrete(name="Age Group",breaks=unique(graph_kcal_f$age_range),labels=x.label)+facet_grid(cols=vars(factor(variable)))+theme(legend.position=c(0.5,0.4),legend.background=element_rect(size=0.5,color="black"),panel.background = element_blank(),axis.line = element_line(color="black"))
-#print(kcalf_w)
-#ggsave("./Programs/R/output/2011/kf_plot_w.png")
+kcalf_w=ggplot()+geom_path(data=subset(graph_kcal_f,sex=="Female"),aes(x=factor(age_range),y=value,group=sourceref,color=sourceref,linetype=sourceref),size=1)+scale_color_manual(breaks=wha,values=clr,name="Reference Source and Level",labels=lbl)+scale_linetype_manual(breaks=wha,values=lnt,labels=lbl,name="Reference Source and Level")+ scale_y_continuous(name="Energy inadequacy % ",limits=c(0,100),breaks=seq(0,100,10),expand=c(0,0))+scale_x_discrete(name="Age Group",breaks=unique(graph_kcal_f$age_range),labels=x.label)+facet_grid(cols=vars(factor(variable)))+theme(legend.position=c(0.5,0.4),legend.background=element_rect(size=0.5,color="black"),panel.background = element_blank(),axis.line = element_line(color="black"))
+print(kcalf_w)
+ggsave("./Programs/R/output/2011/kf_plot_w.png")
 
 
 graph_kcal_inequality=w_kcal%>%
@@ -326,9 +325,8 @@ pivot_longer(cols=3:26,names_to=c("v1","v2","v3","v4"),names_sep="_",values_drop
 k_HHinequality=ggplot()+geom_path(data=subset(graph_kcal_inequality,v1=="actual"),aes(x=factor(age_range),y=value,group=sourceref,color=sourceref,linetype=sourceref),size=1)+scale_color_manual(breaks=wha,values=clr,name="Reference Source and Level",labels=lbl)+
   scale_linetype_manual(breaks=wha,values=lnt,labels=lbl,name="Reference Source and Level")+
   scale_y_continuous(name="Frequency (%) ",limits=c(0,50),breaks=seq(0,50,10),expand=c(0,0))+scale_x_discrete(name="Age Group",breaks=unique(graph_kcal_inequality$age_range),labels=x.label)+facet_grid(cols=vars(factor(sex)),rows=vars(factor(v2)))+theme(legend.position=c(0.5,0.4),legend.background=element_rect(size=0.5,color="black"),panel.background = element_blank(),axis.line = element_line(color="black"),panel.spacing = unit(1, "lines"))
-
-#print(k_HHinequality)
-#ggsave("./Programs/R/output/2011/kf_HHineq.png")
+print(k_HHinequality)
+ggsave("./Programs/R/output/2011/kf_HHineq.png")
 
 
 fi_kcal=w_kcal%>%
