@@ -131,6 +131,7 @@ rm(filenames,filepath,i,names,x1_1_f_2015)
 
 setwd("C:/Users/lilac2/Box/BIHS_Project")
 #setwd("/Users/juli/Desktop/BIHS/master/BIHS_Project")
+
 ###Import nutrition data
 FCT_Bangladesh =read_excel("./Data/Clean Data/nutrient tables/FCDB_7_4_14_LC.xlsx",sheet = "UserDB_Main_table")%>% 
 dplyr::select(2,3,8,11:13,16,17)%>% 
@@ -1379,6 +1380,7 @@ Save household and individual rosters for analysis
 ```{r save, echo=FALSE}
 
 setwd("C:/Users/lilac2/Box/BIHS_Project")
+#setwd("/Users/juli/Desktop/BIHS/master/BIHS_Project")
 
 write.csv(w.I.roster.2015,"./Programs/R/rosters/w.I.roster_2015.csv",row.names=FALSE)
 
