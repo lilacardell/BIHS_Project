@@ -11,7 +11,7 @@ output: pdf_document
 Set working directory and install packages
 ```{r setup, include=FALSE}
 
-knitr::opts_chunk$set(echo = FALSE,root.dir='C:/Users/lilac2/Box/BIHS_Project',warning = FALSE, message=FALSE)
+knitr::opts_chunk$set(echo = FALSE,root.dir='D:/SP21/BIHSgit/BIHS_Project',warning = FALSE, message=FALSE)
 options(scipen=999)
 set.seed(12345)
 ###  Check for and load Packages   ###
@@ -55,7 +55,7 @@ lapply(packages, pkgTest)
 ```{r import BIHS data,results='hide'}
 # Read in data for project
 
-setwd("C:/Users/lilac2/Box/BIHS_Project")
+setwd("D:/SP21/BIHSgit/BIHS_Project")
 
 #this pulls in all 2011 household level files except the WEAI
 filenames<-grep(list.files(path="./Data//Raw Data/bihs_2011_2012/household/data"),pattern=c("weai","h"),inv=TRUE,value=TRUE)
@@ -104,10 +104,283 @@ rm(filenames,filepath,i,names,x1_1_f_2015)
 
 ```
 
+#Select variables from related modules
+#All pivot_longer functions are commented out to avoid replicated rows
+Siyao's part
+1.1 Select y8 data (health worker visits)
+
+```{r}
+# select health worker and group meeting data and rename variables
+# question: pivot longer twice safe?
+CHW_visit = y8_female_2011%>%
+  dplyr::select("a01","y8_01","y8_02","y8_03","y8_04",contains("y8_05"),"y8_06",contains("y8_07"))%>%
+  rename(hhid = a01, visit_sixMon = y8_01, health_org = y8_02, num_visited_sixMon = y8_03, any_advice = y8_04, advice1 = y8_05_1,advice2 = y8_05_2,advice3 = y8_05_3,advice4 = y8_05_4, any_grpDiscuss = y8_06, discuss_topics1 = y8_07_1,discuss_topics2 = y8_07_2,discuss_topics3 = y8_07_3,discuss_topics4 = y8_07_4)
+
+# pivot longer topics discussed with health worker(y8_05) and group meeting(y8_07)
+# selected_y8_topics = selected_y8%>%
+#   pivot_longer(cols = y8_05_1:y8_05_4, names_to = "y8_05",values_drop_na = TRUE)%>%
+#   dplyr::select(-y8_05)%>%
+#   dplyr::rename(y8_05=value)%>%
+#   pivot_longer(cols = y8_07_1:y8_07_4, names_to = "y8_07",values_drop_na = TRUE)%>%
+#   dplyr::select(-y8_07)%>%
+#   dplyr::rename(y8_07=value)
+```
+
+1.2 select I1 data (Summary of Agriculture Production)
+
+```{r}
+# select i1 data, drop "sample type" column that is not necessary
+Ag_production = i1_male_2011%>%
+  dplyr::select(-sample_type)
+
+# code NA values to 0 (on quantity, reasons, etc.)
+Ag_production[is.na(Ag_production)] = 0
+# Ag_production = Ag_production%>%
+#   mutate_at(.vars = c("i1_01","i1_02","i1_03","i1_04", "i1_05", "i1_06","i1_07","i1_08","i1_09a","i1_09b","i1_10","i1_11","i1_12a","i1_12b","i1_13","i1_14","i1_15"), funs(ifelse((is.na(Ag_production$.)), Ag_production$.,0)))
+
+# rename variables
+Ag_production = Ag_production%>%
+  rename(hhid = a01, crop_code = crop, qty_harvested_kg = i1_01, qty_received_shareOutPlot_kg = i1_02, qty_land_owner_shareOutPlot_kg = i1_03, qty_irrigation_purpose_kg = i1_04, qty_gave_to_labor_kg = i1_05, qty_for_consumed_kg = i1_06, qty_donationOthers_kg = i1_07,qty_animalFeed_kg = i1_08, qty_damage_kg = i1_09a, reason_damage = i1_09b, qty_sold_kg = i1_10, where_sold = i1_11, distance_salePoint_km = i1_12a, time_trave_min = i1_12b, sale_taka = i1_13, qty_store_seed_kg = i1_14, current_stock_kg = i1_15)
+
+```
+
+1.3 select I2 data (Food Grain Stock and Storage Capacity)
+
+```{r}
+selected_i2 = i2_male_2011
+# code `without stocks` of `End of Month food grain stock paddy, December 2013 (kg)` to zero
+selected_i2$i2_02_1 = ifelse((selected_i2$i2_02_1 == 99999), 0, selected_i2$i2_02_1)
+# rename variables
+grain_stock = selected_i2%>%
+  rename(hhid = a01, food_grain_stock_paddy_Dec2010_kg = i2_02_1, food_grain_stock_paddy_Jan2011_kg = i2_03_1, food_grain_stock_paddy_Feb2011_kg = i2_04_1, food_grain_stock_paddy_Mar2011_kg = i2_05_1, food_grain_stock_paddy_Apr2011_kg = i2_06_1, food_grain_stock_paddy_May2011_kg = i2_07_1, food_grain_stock_paddy_Jun2011_kg = i2_08_1, food_grain_stock_paddy_July2011_kg = i2_09_1, food_grain_stock_paddy_Aug2011_kg = i2_10_1, food_grain_stock_paddy_Sep2011_kg = i2_11_1, food_grain_stock_paddy_Oct2011_kg = i2_12_1, food_grain_stock_paddy_Nov2011_kg = i2_13_1, food_grain_stock_rice_Dec2010_kg = i2_02_2, food_grain_stock_rice_Jan2011_kg = i2_03_2, food_grain_stock_rice_Feb2011_kg = i2_04_2, food_grain_stock_rice_Mar2011_kg = i2_05_2, food_grain_stock_rice_Apr2011_kg = i2_06_2, food_grain_stock_rice_May2011_kg = i2_07_2, food_grain_stock_rice_Jun2011_kg = i2_08_2, food_grain_stock_rice_July2011_kg = i2_09_2, food_grain_stock_rice_Aug2011_kg = i2_10_2, food_grain_stock_rice_Sep2011_kg = i2_11_2, food_grain_stock_rice_Oct2011_kg = i2_12_2, food_grain_stock_rice_Nov2011_kg = i2_13_2, food_grain_stock_wheat_Dec2010_kg = i2_02_3,  food_grain_stock_wheat_Jan2011_kg = i2_03_3, food_grain_stock_wheat_Feb2011_kg = i2_04_3, food_grain_stock_wheat_Mar2011_kg = i2_05_3, food_grain_stock_wheat_Apr2011_kg = i2_06_3, food_grain_stock_wheat_May2011_kg = i2_07_3, food_grain_stock_wheat_Jun2011_kg = i2_08_3, food_grain_stock_wheat_July2011_kg = i2_09_3, food_grain_stock_wheat__Aug2011_kg = i2_10_3, food_grain_stock_wheat_Sep2011_kg = i2_11_3, food_grain_stock_wheat_Oct2011_kg = i2_12_3, food_grain_stock_wheat_Nov2011_kg = i2_13_3, storage_capacity = i2_14)
+```
+
+
+1.4 select R01/R03 data (Sanitation and Water; R01 = latrine type, R03 = water source)
+
+```{r}
+#select r01 and r03 columns and rename variables
+latrine_water = r_male_2011%>%
+  dplyr::select("a01", contains("r01"), "r03")%>%
+  rename(hhid = a01, latrine_type = r01, waterSource_othPurposes = r03)
+
+```
+
+1.5 select U data (Social Safety Net Programs)
+
+```{r}
+# select u data and rename variables
+social_safety = u_male_2011%>%
+  dplyr::select("a01","slno","u01","mid_1","mid_2","u02","u03","u04","u05","u06","u07","u08")%>%
+  filter(!is.na(mid_1))%>%
+  # pivot_longer(cols = mid_1:mid_2, names_to = "mid",values_drop_na = TRUE)%>%
+  # dplyr::select(-mid)%>%
+  # dplyr::rename(mid=value)
+  rename(hhid = a01, slno_safetyNet = slno, any_assist = u01, cash_received = u02, rice_kg = u03, rice_valPerkg = u04, wheat_kg = u05, wheat_tkPerkg = u06, othfood_valtk = u07, othik_valtk = u08)
+
+```
+
+1.6 Merge selected variables with w.I.roster.2011
+```{r}
+# Import w.hh.roster.2011 data that has been previously saved
+library(foreign)
+w.hh.roster.2011 <- read.dta("D:/SP21/BIHSgit/BIHS_Project/Data/Output/w.hh.roster.2011.dta")
+
+# merge selected variables with w.hh.roster.2011
+# 
+# roster.hh.2011.with.var = merge(x= w.hh.roster.2011, y = Ag_production, by = "hhid")
+
+roster.hh.2011.with.var = w.hh.roster.2011%>%
+  left_join(Ag_production,by=c("hhid"))%>%
+  left_join(grain_stock,by=c("hhid"))%>%
+  left_join(latrine_water,by=c("hhid"))%>%
+  left_join(CHW_visit,by=c("hhid"))%>%
+  left_join(social_safety,by=c("hhid"))
+```
+
+Ju Li's Part
+
+1.7 Coding for table `v1`(Profile of Current Migrants, Domestic and International) :
+
+```{r}
+# select all the household having any members who are migrants(condition: v1_01 == 1)
+library(tidyverse)
+library(dplyr)
+current_migrants = v1_male_2011%>%filter(v1_01 == 1)%>%
+  select(-c(v1_01))%>%
+  dplyr::rename(hhid = a01, relation_to_hh_head = v1_02, migration_years = v1_03, migration_month = v1_04, age = v1_05, sex = v1_06, education = v1_07, occupation = v1_08, country_locating = v1_09, 
+                zila_code = v1_10, country_code = v1_11, migration_purpose = v1_12, the_way_migration_expense_paid = v1_13, sending_remittance = v1_14)
+```
+
+```{r}
+# recode levels "No" of v1_14 from 2 to 0 
+current_migrants[current_migrants$sending_remittance == 2, ]$sending_remittance = 0
+mean(current_migrants$sending_remittance)
+```
+
+```{r}
+# the proportion of sending home remittance group by education level
+# eduction codes:Never attended school ........................ 99
+# Reads in class I .................................. 0 
+# Completed class I............................... 1 
+# Completed class II.............................. 2 
+# Completed class III ............................ 3 
+# Completed class IV ............................ 4 
+# Completed class V ............................. 5 
+# Completed class VI ............................ 6 
+# Completed class VII........................... 7 
+# Completed class VIII ......................... 8 
+# Completed class IX ............................ 9 
+# Completed Secondary School/Dakhil. 10 
+# Completed Higher Secondary/Alim ... 12 
+# BA/BSC pass/Fazil ............................ 14 
+# BA/BSC honors/Fazil ........................ 15 
+# MA/MSC and above/Kamil ............... 16 
+# SSC Candidate ................................... 22 
+# HSC Candidate .................................. 33 
+# Preschool class (general) .................... 66 
+# Preschool (mosque based).................. 67 
+# Medical/MBBS .................................71 
+# Nursing .............................................. 72 
+# Engineer ............................................. 73 
+# Diploma Engineer .............................. 74 
+# Vocational/TechnicalEducation .......75 
+# Other (specify) ....................................76
+current_migrants%>%group_by(education)%>%
+  dplyr::summarise(mean(sending_remittance))
+```
+
+```{r}
+# Migrating member paid all expenses............1 
+# All expenses were paid from common household resources .......................2 
+# Received money from friends/relatives.........3 
+# Borrowed money from friends and relatives ......................................4 
+# Borrowed money from commercial lender....5 
+# Made arrangement with employment agency/foreign employer...............................6 
+# Mortgaged land.............................................7 
+# Sold own land or other assets........................8 
+# I do not know ................................................9 
+# Others (Specify) ................................................10.
+# the proportion of sending home remittance group by the way of the migration paid
+current_migrants%>%group_by(the_way_migration_expense_paid)%>%
+  dplyr::summarise(mean(sending_remittance))
+#plot(corr_13_prop_14)
+```
+
+1.8 Coding for table `v2`(Remittance in):
+
+```{r}
+# select household receiving any money from any person who does not live in your household(condition: v2_01 == 1)
+remittance_in = v2_male_2011%>%
+  rename(hhid = a01, receiving_remittance = v2_01, relationship_with_remitter = v2_02,  remitter_zila_code = v2_03, remitter_country_code = v2_04, receiving_times = v2_05, receiving_amount = v2_06, the_way_remittance_sent = v2_07, expenditure_cut_without_receiving = v2_08, senter_putting_condition = v2_09, items = v2_10)%>%
+  select(-flag)%>%
+  filter(receiving_remittance == 1)
+```
+
+```{r}
+# create a new variable `average_remittance`
+# change the shape of table by pivot longer on v2_08a:v2_08c(Which expenditure, saving,
+# and investment, would have been CUT had the remittance from this source not been received?)
+remittance_in = remittance_in%>%
+  mutate(average_remittance = receiving_amount/receiving_times)
+```
+
+```{r}
+#figure out the money mostly been cut off - interesting!(group by which expenditure would be cut off with receiving money and use count function)
+# 3:health
+# 4:consumption(food, cloth) 
+remittance_in%>%group_by(expenditure_cut_without_receiving)%>%
+  summarise(n = n())
+```
+
+1.9 Coding for table `v3`(Remittance_out):
+
+```{r}
+# select all the household sending money to someone who does not live in your household(condition: v3_01 == 1)
+# merge v_2 and v_3
+remittance_out = v3_male_2011%>%
+  rename(hhid = a01, sending_remittance = v3_01, relationship_with_recipient = v3_02, recipient_zila_code = v3_03, recipient_country_code = v3_04, sending_times = v3_05, sending_amount = v3_06, the_way_remittance_sent = v3_07)%>%filter( sending_remittance == 1)
+remittance = merge(x = remittance_in, y = remittance_out, by = "hhid")
+
+```
+
+```{r}
+# filtering the merge table to find household both sending and receiving money
+# create a variable to calculate net_remittance
+remittance = remittance%>%filter(receiving_remittance == 1 & sending_remittance == 1)%>%
+  mutate(net_remittance = receiving_amount - sending_amount)
+nrow(v2_3_male_2011_both[v2_3_male_2011_both$net_remittance<0,])
+nrow(v2_3_male_2011_both[v2_3_male_2011_both$net_remittance==0,])
+nrow(v2_3_male_2011_both[v2_3_male_2011_both$net_remittance>0,])
+```
+
+1.10 Coding for table `v4`(Other Income Household):
+
+```{r}
+# rename all the variables 
+# create a new variable sum_other_income to sum up all kinds of income
+other_income = v4_male_2011 
+other_income[is.na(other_income)] = 0 
+
+other_income = other_income%>%mutate(sum_other_income = v4_01+v4_02+v4_03+v4_04+v4_05+v4_06+v4_07+v4_08+v4_09+v4_10+v4_11+v4_12)%>%
+  rename(hhid = a01, land_rent = v4_01, other_rent = v4_02, insurance = v4_03, profits_dividends = v4_04, gratuity_seperation_payment_retire_benefit = v4_05, lottery_prize_cash = v4_06, lottery_prize_kind = v4_07, charity_assistance_cash = v4_08, charity_assistance_kind = v4_09, interest = v4_10, other_cash_receipts = v4_11, other_in_kind_receipts = v4_12, other_assests = v4_13)
+
+```
+
+```{r}
+# merge table 2 and 3 and 4
+remittance_otherIncome = merge(x = v2_3_male_2011, y = other_income, by = "hhid")
+```
+
+```{r}
+#merge selected_v2 table and w.hh.roster table
+w.hh.remittance.otherIncome = merge(x = remittance_otherIncome, y = w.hh.roster.2011, by = "hhid")
+nrow(w_hh_v2)
+```
+
+1.11 Coding for table `T1`(Negative Shocks):
+
+```{r}
+# filter all the household having any negative shocks
+neg_shock = t1_male_2011%>%
+  rename(hhid = a01, shocks = t1_02, times_of_shocks = t1_03, month_when_shocks_happen = t1_04, 
+         year_when_shocks_happen = t1_05, current_condition = t1_06, loss_value = t1_07, the_way_cope_with_effect_a = t1_08a, the_way_cope_with_effect_b = t1_08b, the_way_cope_with_effect_c = t1_08c, time_span_of_shocks = t1_09, rank_of_shocks = t1_10)
+```
+
+1.12 Coding for table `T2`(Positive Events):
+
+```{r}
+# filter all the household having any positive events
+pos_event = t2_male_2011%>%
+  rename(hhid = a01, event = t2_02, experiencing_positive_event = t2_03, the_month_when_positive_events_happen = t2_04, the_year_when_positive_events_happen = t2_05,
+         value_of_received_items = t2_06, rank_of_positive_effects = t2_07)%>%
+    filter(experiencing_positive_event == 1)
+
+```
+
+```{r}
+# merge negative shocks and positive events
+neg_pos = merge(x = neg_shock, y = pos_event, by = "hhid")
+```
+
+1.13 Merge negative and positive events with w.hh.remittance.otherIncome
+```{r}
+# merge negative and positive events with w.hh.remittance.otherIncome
+w.hh.remittance.otherIncome.neg.pos = merge(x = w.hh.remittance.otherIncome, y = neg_pos, by = "hhid")
+```
+
+
+1.14 Merge all variables to w.hh.roster.2011 (roster.hh.2011.with.var)
+```{r}
+# merge all variables from 1.1 to 1.14
+roster.hh.2011.with.var = merge(x= roster.2011.with.var, y = w.hh.remittance.otherIncome.neg.pos, by = "hhid")%>%
+  select(-contains("sample_type."))
+```
+
 2. Import FCT Data
 ```{r import FCT Data,results='hide'}
 
-setwd("C:/Users/lilac2/Box/BIHS_Project")
+setwd("D:/SP21/BIHSgit/BIHS_Project")
 
 ###Import nutrition data
 FCT_Bangladesh =read_excel("./Data/Clean Data/nutrient tables/FCDB_7_4_14_LC.xlsx",sheet = "UserDB_Main_table")%>% 
@@ -620,10 +893,10 @@ sample_type = aggregate(hhid~sampletype, data=roster_2011_hh, FUN = length)
 #3:National Representative 4423
 
 #import weights
-weights_2011 <- read_dta("C:/Users/lilac2/Box/BIHS_Project/Data/Raw Data/bihs_2011_2012/IFPRI_BIHS_R1_expenditure.dta") %>%
+weights_2011 <- read_dta("D:/SP21/BIHSgit/BIHS_Project/Data/Raw Data/bihs_2011_2012/IFPRI_BIHS_R1_expenditure.dta") %>%
   dplyr::select(a01,dvcode,vcode,aeu,hhweightR1,popweightR1)
 
-#weights_2015 <- read_dta("C:/Users/lilac2/Box/BIHS_Project/Data/Raw Data/bihs_2015/IFPRI_BIHS_R2_exp.dta")
+#weights_2015 <- read_dta("D:/SP21/BIHSgit/BIHS_Project/Data/Raw Data/bihs_2015/IFPRI_BIHS_R2_exp.dta")
 
 
 #choose sample type 2 and 3, eliminate poly households
@@ -668,7 +941,7 @@ abc=ab%>%
    mutate(mean=if_else(mean<1,paste0(round(mean*100,2),"%"),as.character(round(mean,2))))
   
 
-setwd("C:/Users/lilac2/Box/BIHS_Project")
+setwd("D:/SP21/BIHSgit/BIHS_Project")
 
 descriptives=kable(abc,booktabs=TRUE,digits=3,
                    col.names=c("Variable","Weighted Mean","SD"),escape=F)%>%
@@ -685,7 +958,7 @@ save_kable(descriptives,"./Programs/R/output/2011/BIHS_Projectdescriptives.png")
 
 
 #a=qflextable(ab)
-#write.table(ab,file="C:/Users/lilac2/Box/BIHS_Project/Programs/R/output/descriptives.doc")
+#write.table(ab,file="D:/SP21/BIHSgit/BIHS_Project/Programs/R/output/descriptives.doc")
 
 
 rm(listx,ab,a,abc)
@@ -698,7 +971,7 @@ I. Import reference standards
 I.1 Import India Reference standards and Energy Requirements
 ```{r India}
 
-setwd("C:/Users/lilac2/Box/BIHS_Project")
+setwd("D:/SP21/BIHSgit/BIHS_Project")
 
 #INDIA requirements and AE
 #read in adult equivalent from India
@@ -745,7 +1018,7 @@ rm(list=ls(pattern="India"))
 I.2 Import FAO height weight and BMI reference standards and energy Requirements
 ```{r FAO}
 
-setwd("C:/Users/lilac2/Box/BIHS_Project")
+setwd("D:/SP21/BIHSgit/BIHS_Project")
 
 #FAO weight height
 hfa_girls_24 <- read_excel("./Data/Clean Data/nutrient standards/WHOFAO_requirements_2011.xlsx",sheet="hfa_girls_25",col_names = TRUE)%>%
@@ -952,7 +1225,7 @@ I.3 Import IOM height weight and Nutrient Requirements
 ```{r IOM}
 
 
-setwd("C:/Users/lilac2/Box/BIHS_Project")
+setwd("D:/SP21/BIHSgit/BIHS_Project")
 
 #DRI standards
 #energy requirements
