@@ -770,7 +770,7 @@ Ag_production = i1_male_2011%>%
 grain_stock = i2_male_2011%>%
   pivot_longer(cols = i2_02_1:i2_13_3, names_to = 'grain_month', values_to = 'qty')
 
-grain_stock$grain_type = ifelse(str_detect(grain_stock$grain_month, fixed("02")),"Dec2010",
+# grain_stock$grain_type = ifelse(str_detect(grain_stock$grain_month, fixed("02")),"Dec2010",
                                 
                          # ifelse(str_detect(grain_stock$grain_month, fixed("03")),"Jan2011",
                          # ifelse(str_detect(grain_stock$grain_month, fixed("04")),"Feb2011", 
