@@ -11,8 +11,8 @@ output: pdf_document
 Set working directory and install packages
 ```{r setup, include=FALSE}
 
-#knitr::opts_chunk$set(echo = FALSE,root.dir='D:/SP21/BIHSgit/BIHS_Project',warning = FALSE, message=FALSE)
-knitr::opts_chunk$set(echo = FALSE,root.dir='C:/Users/lilac2/Box/BIHS_Project',warning = FALSE, message=FALSE)
+knitr::opts_chunk$set(echo = FALSE,root.dir='D:/UIUC/SP21/BIHSgit/BIHS_Project',warning = FALSE, message=FALSE)
+#knitr::opts_chunk$set(echo = FALSE,root.dir='C:/Users/lilac2/Box/BIHS_Project',warning = FALSE, message=FALSE)
 
 
 options(scipen=999)
@@ -58,8 +58,8 @@ lapply(packages, pkgTest)
 ```{r import BIHS data,results='hide'}
 # Read in data for project
 
-#setwd("D:/SP21/BIHSgit/BIHS_Project")
-setwd("C:/Users/lilac2/Box/BIHS_Project")
+setwd("D:/UIUC/SP21/BIHSgit/BIHS_Project")
+#setwd("C:/Users/lilac2/Box/BIHS_Project")
 
 #this pulls in all 2011 household level files except the WEAI
 filenames<-grep(list.files(path="./Data//Raw Data/bihs_2011_2012/household/data"),pattern=c("weai","h"),inv=TRUE,value=TRUE)
@@ -114,8 +114,8 @@ rm(filenames,filepath,i,names,x1_1_f_2015)
 2. Import FCT Data
 ```{r import FCT Data,results='hide'}
 
-#setwd("D:/SP21/BIHSgit/BIHS_Project")
-setwd("C:/Users/lilac2/Box/BIHS_Project")
+setwd("D:/UIUC/SP21/BIHSgit/BIHS_Project")
+#setwd("C:/Users/lilac2/Box/BIHS_Project")
 
 ###Import nutrition data
 FCT_Bangladesh =read_excel("./Data/Clean Data/nutrient tables/FCDB_7_4_14_LC.xlsx",sheet = "UserDB_Main_table")%>% 
@@ -612,8 +612,8 @@ summary.hh.2011= roster_2011_hh %>%
 D2. Add survey weights and restrict to representative sample (5503 HH)
 ```{r summary, echo=FALSE}
 
-setwd("C:/Users/lilac2/Box/BIHS_Project")
-#setwd("D:/SP21/BIHSgit/BIHS_Project")
+#setwd("C:/Users/lilac2/Box/BIHS_Project")
+setwd("D:/UIUC/SP21/BIHSgit/BIHS_Project")
 
 
 sample_type = aggregate(hhid~sampletype, data=roster_2011_hh, FUN = length)
@@ -625,7 +625,7 @@ sample_type = aggregate(hhid~sampletype, data=roster_2011_hh, FUN = length)
 weights_2011 <- read_dta("./Data/Raw Data/bihs_2011_2012/IFPRI_BIHS_R1_expenditure.dta") %>%
   dplyr::select(a01,dvcode,vcode,aeu,hhweightR1,popweightR1)
 
-#weights_2015 <- read_dta("D:/SP21/BIHSgit/BIHS_Project/Data/Raw Data/bihs_2015/IFPRI_BIHS_R2_exp.dta")
+#weights_2015 <- read_dta("D:/UIUC/SP21/BIHSgit/BIHS_Project/Data/Raw Data/bihs_2015/IFPRI_BIHS_R2_exp.dta")
 
 
 #choose sample type 2 and 3, eliminate poly households
@@ -687,7 +687,7 @@ save_kable(descriptives,"./Programs/R/output/2011/BIHS_Projectdescriptives.png")
 
 
 #a=qflextable(ab)
-#write.table(ab,file="D:/SP21/BIHSgit/BIHS_Project/Programs/R/output/descriptives.doc")
+#write.table(ab,file="D:/UIUC/SP21/BIHSgit/BIHS_Project/Programs/R/output/descriptives.doc")
 
 
 rm(listx,ab,a,abc)
@@ -712,6 +712,10 @@ CHW_visit = y8_female_2011%>%
 ####you need to recode all yes/no variables, so that "no" is equal to zero, as it is coded as 2 in the codebook
 #here is an example for two of those variables
 CHW_visit[CHW_visit$visit_sixmo == 2, ]$visit_sixmo = 0
+
+#Issue(fixed): any_advice column has NA values that will gives "Error: Can't use NA as row index in a tibble for assignment." when running the second line below.
+#Issue(fixed): therefore, replace the NA values first with 0
+CHW_visit[is.na(CHW_visit$any_advice), ]$any_advice = 0
 CHW_visit[CHW_visit$any_advice == 2, ]$any_advice = 0
 
 #can you explain why you would need to pivot?
@@ -733,12 +737,12 @@ CHW_visit[CHW_visit$any_advice == 2, ]$any_advice = 0
 #Do not change $ variables (NA to 0)
 ```{r}
 # select i1 data, drop "sample type" column that is not necessary
+#Issue: only 5501 obs
 Ag_production = i1_male_2011%>%
-    dplyr::rename(hhid=a01)%>%
+  dplyr::rename(hhid=a01)%>%
   group_by(hhid)%>%
   dplyr::summarise(agsales=sum(i1_13,na.rm=TRUE))%>%
   dplyr::select(hhid,agsales)
-  
 
 # code NA values to 0 (on quantity, reasons, etc.) do not to for $$$
 #Ag_production[is.na(Ag_production)] = 0
@@ -762,6 +766,28 @@ Ag_production = i1_male_2011%>%
   #first pivot longer so we each observation is a hhid-grain pair
  #group by hh and summarise by creating a binary variable for each money if the hh had any grain stocks
   #count the number of months for which that binary variable is greater than zero for each hh
+
+grain_stock = i2_male_2011%>%
+  pivot_longer(cols = i2_02_1:i2_13_3, names_to = 'grain_month', values_to = 'qty')
+
+grain_stock$grain_type = ifelse(str_detect(grain_stock$grain_month, fixed("02")),"Dec2010",
+                                
+                         # ifelse(str_detect(grain_stock$grain_month, fixed("03")),"Jan2011",
+                         # ifelse(str_detect(grain_stock$grain_month, fixed("04")),"Feb2011", 
+                         # ifelse(str_detect(grain_stock$grain_month, fixed("05")),"Mar2011", 
+                         # ifelse(str_detect(grain_stock$grain_month, fixed("06")),"Apr2011", 
+                         # ifelse(str_detect(grain_stock$grain_month, fixed("07")),"May2011", 
+                         # ifelse(str_detect(grain_stock$grain_month, fixed("08")),"June2011", 
+                         # ifelse(str_detect(grain_stock$grain_month, fixed("09")),"July2011", 
+                         # ifelse(str_detect(grain_stock$grain_month, fixed("10")),"Aug2011", 
+                         # ifelse(str_detect(grain_stock$grain_month, fixed("11")),"Sep2011", 
+                         # ifelse(str_detect(grain_stock$grain_month, fixed("12")),"Oct2011", 
+                         # "Nov2011"))
+
+grain_stock = grain_stock%>%
+  pivot_wider(names_from = grain_type, values_from = qty)%>%
+  select(-grain_month)
+  
   
 ```
 
@@ -771,12 +797,14 @@ Ag_production = i1_male_2011%>%
 ```{r}
 #select r01 and r03 columns and rename variables
 latrine_water = r_male_2011%>%
-  dplyr::select("a01", contains("r01"), "r03")%>%
-  rename(hhid = a01, latrine_type = r01, waterSource_othPurposes = r03)
+  dplyr::select("a01", contains("r01"), "r06")%>%
+  rename(hhid = a01, latrine_type = r01, drinkwater_souce = r06)
 
 #drop r03
 #create binary variable =1 if HH had any HH-based latrine (r01=2,3,4,5)
 # create binary varibale = 1 if drinking is filtered or treated (r06=1,2,3,4,6)
+latrine_water$hh_lact = ifelse(latrine_water$latrine_type %in% c(2,3,4,5), 1,0)
+latrine_water$treated_drinkwater = ifelse(latrine_water$drinkwater_souce %in% c(1,2,3,4,6), 1,0)
 
 ```
 
@@ -805,7 +833,7 @@ social_safety = u_male_2011%>%
 
 w.hh.roster.2011=w.hh.roster.2011%>%
   left_join(Ag_production,by=c("hhid"))%>%
-  #left_join(grain_stock,by=c("hhid"))%>%
+  left_join(grain_stock,by=c("hhid"))%>%
   left_join(latrine_water,by=c("hhid"))%>%
   left_join(CHW_visit,by=c("hhid"))%>%
   left_join(social_safety,by=c("hhid"))
@@ -1016,7 +1044,7 @@ Import reference standards
 I.1 Import India Reference standards and Energy Requirements
 ```{r India}
 
-#setwd("D:/SP21/BIHSgit/BIHS_Project")
+#setwd("D:/UIUC/SP21/BIHSgit/BIHS_Project")
 setwd("C:/lilac2/BIHS/BIHS_Project")
 
 #INDIA requirements and AE
@@ -1064,7 +1092,7 @@ rm(list=ls(pattern="India"))
 I.2 Import FAO height weight and BMI reference standards and energy Requirements
 ```{r FAO}
 
-#setwd("D:/SP21/BIHSgit/BIHS_Project")
+#setwd("D:/UIUC/SP21/BIHSgit/BIHS_Project")
 setwd("C:/lilac2/BIHS/BIHS_Project")
 
 #FAO weight height
@@ -1272,7 +1300,7 @@ I.3 Import IOM height weight and Nutrient Requirements
 ```{r IOM}
 
 setwd("C:/lilac2/BIHS/BIHS_Project")
-#setwd("D:/SP21/BIHSgit/BIHS_Project")
+#setwd("D:/UIUC/SP21/BIHSgit/BIHS_Project")
 
 #DRI standards
 #energy requirements
@@ -1401,7 +1429,7 @@ Save household and individual rosters for analysis
 ```{r save, echo=FALSE}
 
 setwd("C:/lilac2/BIHS/BIHS_Project")
-#setwd("D:/SP21/BIHSgit/BIHS_Project")
+#setwd("D:/UIUC/SP21/BIHSgit/BIHS_Project")
 
 write.csv(w.I.roster.2011,"./rosters/w.I.roster_2011.csv",row.names=FALSE)
 
