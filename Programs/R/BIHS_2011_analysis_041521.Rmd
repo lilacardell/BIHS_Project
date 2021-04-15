@@ -613,7 +613,7 @@ hh_kcal_workervisits = left_join(hh_kcal_inad, hh_workervisits, by=c("hhid"))
 
 Siyao's Analysis
 
-ANOVA:any health worker visits & average BMI
+ANOVA:any health worker visits & average BMI, BMI inadequacy
 ```{r}
 
 #descriptive statistics
@@ -631,9 +631,9 @@ ANOVA:any health worker visits & average BMI
 #     sd = sd(num_visited_sixmo, na.rm = TRUE)
 #   )
 
-w_BMI_workervisit=hh_BMI_workervisits%>%
-  as_survey_design(ids=vcode, strata=dvcode,weights=popweightR1)%>%
-  summarise_all(survey_mean,na.rm=TRUE)
+# w_BMI_workervisit=hh_BMI_workervisits%>%
+#   as_survey_design(ids=vcode, strata=dvcode,weights=popweightR1)%>%
+#   summarise_all(survey_mean,na.rm=TRUE)
 
 #ANOVA
 # levels: visited or not 
@@ -642,10 +642,31 @@ hh_BMI_workervisits$visit_sixmo <- ordered(hh_BMI_workervisits$visit_sixmo,
 
 # Compute the analysis of variance
 res.aov <- aov(BMI ~ visit_sixmo, data = hh_BMI_workervisits)
+#res.aov <- aov(any_BMI_inadequate ~ visit_sixmo, data = hh_BMI_workervisits)
 # Summary of the analysis
 summary(res.aov)
 
 ```
+ANOVA:any health worker visits & kcal inadequacy, actual kcal inadequacy FAO group
+```{r}
+
+# w_kcal_workervisit=hh_kcal_workervisits%>%
+#   as_survey_design(ids=vcode, strata=dvcode,weights=popweightR1)%>%
+#   summarise_all(survey_mean,na.rm=TRUE)
+
+#ANOVA
+# levels: visited or not 
+hh_kcal_workervisits$visit_sixmo <- ordered(hh_kcal_workervisits$visit_sixmo,
+                         levels = c(0, 1))
+
+# Compute the analysis of variance
+#res.aov <- aov(any_kcal_inadequate ~ visit_sixmo, data = hh_kcal_workervisits)
+res.aov <- aov(actual_inadequate_FAO_grp ~ visit_sixmo, data = hh_kcal_workervisits)
+# Summary of the analysis
+summary(res.aov)
+
+```
+
 
 Linear Regression - number of health worker visits & BMI inadequacy
 ```{r}
@@ -668,7 +689,7 @@ Linear Regression - number of health worker visits & average BMI
 
 hh_BMI_workervisits_num = hh_BMI_workervisits%>%
   filter(visit_sixmo == 1)%>%
-  # filter(age_range == "Older Adolescent (14-17)")%>%
+  # filter(age_range != "Older Adolescent (14-17)")%>%
   # filter(age_range == "Young Adolescent (11-13)")%>%
   # filter(age_range == "Older Child (8-10)")%>%
   # filter(age_range == "Young Child (4-7)")%>%
