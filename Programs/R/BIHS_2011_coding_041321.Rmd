@@ -11,9 +11,8 @@ output: pdf_document
 Set working directory and install packages
 ```{r setup, include=FALSE}
 
-knitr::opts_chunk$set(echo = FALSE,root.dir='D:/UIUC/SP21/BIHSgit/BIHS_Project',warning = FALSE, message=FALSE)
 #knitr::opts_chunk$set(echo = FALSE,root.dir='C:/Users/lilac2/Box/BIHS_Project',warning = FALSE, message=FALSE)
-
+knitr::opts_chunk$set(echo = FALSE,root.dir='D:/UIUC/SP21/BIHSgit/BIHS_Project',warning = FALSE, message=FALSE)
 
 options(scipen=999)
 set.seed(12345)
@@ -58,8 +57,8 @@ lapply(packages, pkgTest)
 ```{r import BIHS data,results='hide'}
 # Read in data for project
 
-setwd("D:/UIUC/SP21/BIHSgit/BIHS_Project")
 #setwd("C:/Users/lilac2/Box/BIHS_Project")
+setwd("D:/UIUC/SP21/BIHSgit/BIHS_Project")
 
 #this pulls in all 2011 household level files except the WEAI
 filenames<-grep(list.files(path="./Data//Raw Data/bihs_2011_2012/household/data"),pattern=c("weai","h"),inv=TRUE,value=TRUE)
@@ -114,8 +113,9 @@ rm(filenames,filepath,i,names,x1_1_f_2015)
 2. Import FCT Data
 ```{r import FCT Data,results='hide'}
 
-setwd("D:/UIUC/SP21/BIHSgit/BIHS_Project")
 #setwd("C:/Users/lilac2/Box/BIHS_Project")
+setwd("D:/UIUC/SP21/BIHSgit/BIHS_Project")
+
 
 ###Import nutrition data
 FCT_Bangladesh =read_excel("./Data/Clean Data/nutrient tables/FCDB_7_4_14_LC.xlsx",sheet = "UserDB_Main_table")%>% 
