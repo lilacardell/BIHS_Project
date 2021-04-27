@@ -736,6 +736,7 @@ nonag_employment = c_male_2015%>%
   dplyr::select("a01","c14")%>%
   rename(hhid = a01, nonag_income = c14)
 
+# task:use summarise instead
 #create household level income from non-ag employment
 nonag_employment = aggregate(nonag_employment[, 2], by=list(nonag_employment$hhid), FUN=sum, na.rm = TRUE)%>%
   rename(hhid=Group.1)
@@ -749,6 +750,9 @@ assets = d1_male_2015%>%
   left_join(d2_male_2015, by=c("a01"))%>%
   dplyr::select("a01","d1_09","d1_10","d2_09","d2_10")%>%
   rename(hhid = a01, purchase_val=d1_09,curr_val=d1_10,ag_purchase_val=d2_09,ag_curr_val=d2_10)
+# task:use summarise instead
+  # group_by("hhid")%>%
+  # dplyr::summarise(purchase_val=sum(purchase_val,na.rm=TRUE)
 
 #create household level income from non-ag employment
 assets = aggregate(assets[,2:5], by=list(assets$hhid), FUN=sum, na.rm = TRUE)%>%
