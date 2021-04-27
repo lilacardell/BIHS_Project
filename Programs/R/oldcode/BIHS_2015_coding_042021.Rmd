@@ -784,7 +784,6 @@ Ag_production = i1_male_2015%>%
 1.4 select I2 data (Food Grain Stock and Storage Capacity)
 
 ```{r}
-selected_i2 = i2_male_2015
 #Goal: hh level variables for the maximum number of months of any grain stock  
   #first pivot longer so we each observation is a hhid-grain pair
   #group by hh and summarise by creating a binary variable for each money if the hh had any grain stocks
@@ -885,7 +884,44 @@ pos_shock = t2_male_2015%>%
 
 ```
 
-1.10 merge all modules to the roster
+1.10 select C data (Non-ag employment)
+```{r}
+#select household id and income variables(c14)
+nonag_employment = c_male_2015%>%
+  dplyr::select("a01","c14")%>%
+  rename(hhid = a01, nonag_income = c14)
+
+#create household level income from non-ag employment
+nonag_employment_hh = aggregate(nonag_employment[, 2], by=list(nonag_employment$hhid), FUN=sum, na.rm = TRUE)
+  
+```
+
+1.11 select D1 & D2 data (assets)
+```{r}
+#select variables of purchase price(D1_09,D2_09)and current values(D1_10,D2_10)
+assets = d1_male_2015%>%
+  left_join(d2_male_2015, by=c("a01"))%>%
+  dplyr::select("a01","d1_09","d1_10","d2_09","d2_10")%>%
+  rename(hhid = a01, hh_purchase_val=d1_09,hh_curr_val=d1_10,ag_purchase_val=d2_09,ag_curr_val=d1_10)%>%
+
+#create household level income from non-ag employment
+assets_hh = aggregate(nonag_employment[, 2], by=list(nonag_employment$hhid), FUN=sum, na.rm = TRUE)
+
+```
+
+```{r}
+```
+
+```{r}
+```
+
+```{r}
+```
+
+```{r}
+```
+
+1.1？ merge all modules to the roster
 ```{r}
 w.hh.roster.2015=w.hh.roster.2015%>%
   left_join(CHW_visit,by=c("hhid"))%>%
