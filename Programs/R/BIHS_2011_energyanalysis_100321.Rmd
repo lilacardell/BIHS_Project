@@ -1,0 +1,686 @@
+---
+title: "BIHS_explore"
+author: "Lila Cardell"
+date: "October 3, 2021"
+output: pdf_document
+#fontsize: 11pt
+
+#bibliography: nutrition.bibtex
+---
+
+Set working directory and install packages
+```{r setup, include=FALSE}
+
+knitr::opts_chunk$set(
+	message = FALSE,
+	warning = FALSE,
+	include = FALSE,
+	root.dir = 'C:/Users/lilac2/Box/BIHS_Project'
+)
+
+knitr::opts_knit$set(root.dir='C:/Users/lilac2/Box/BIHS_Project')
+
+## Clear worksace
+rm(list = ls())
+gc()
+
+
+#writeLines('PATH="${RTOOLS40_HOME}\\usr\\bin;${PATH}"', con = "~/.Renviron")
+
+## This function will check if a package is installed, and if not, install it
+pkgTest  =  function(x) {
+  if (!require(x, character.only = TRUE))
+  {
+    install.packages(x, dep = TRUE)
+    if(!require(x, character.only = TRUE)) stop("Package not found")
+  }
+}
+
+## These lines load the required packages
+packages  =  c('data.table','tidyverse','haven','stargazer','plm','lubridate','survey','psych','knitr','xtable','tables','kableExtra','fuzzyjoin','MASS','matrixcalc','car','stringr','styler','readxl','magrittr','sjmisc','readxl','srvyr','gdata','labelled','ggpubr')
+
+#,) ## you can add more packages here
+lapply(packages, pkgTest)
+
+
+rm(packages,pkgTest)
+
+```
+
+
+1. Import files for analysis
+```{r import1}
+
+w.I.roster_2011<-read.csv("./Programs/R/rosters/w.I.roster_2011.csv")
+
+w.hh.roster_2011<-read.csv("./Programs/R/rosters/w.hh.roster_2011.csv")
+
+```
+
+
+
+METHODOLOGY
+
+Individual reported variables:
+1. reported reported calorie consumption (labeled "I_kcal")
+2. BMI (one variable labeled "BMI")
+
+Individual calculated variables:
+1. Allocated nutrient consumption = hh reported consumption/measure of HH size 
+  a. Allocated by # of individuals (hhsize) (labeled "I_kcal*")
+  b. Allocated by AE from DRI (hhsize_IOM) (labeled "I_kcal*")
+  c. Allocated by AE from FAO (hhsize_FAO) (labeled "I_kcal*")
+  d. Allocated by AE from India (hhsize_India) (labeled "I_kcal*")
+  e. Allocated by AE from OECD (hhsize_OECD) (labeled "I_kcal*")
+  
+Individual Calculated measure = Total household consumption of calories x (individual AE/total hh AE)
+
+Household level variables:
+1. HDDS and 3 food security variables ("hhds,hungryday,hungrynight,nofood)
+
+
+
+2. Summary Tables for Reference Weights and Heights and Adult Equivalents
+```{r refwtht}
+
+options(digits=3,knitr.kable.NA = '')
+
+#compare reference weights by age group
+allref=w.I.roster_2011%>%
+  mutate(weight_India_grp_b=if_else(weight<weight_India_grp,1,0),
+         weight_FAO_grp_b=if_else(weight<weight_FAO_grp,1,0),
+          weight_FAO_age_b=if_else(weight<weight_FAO_age,1,0),
+         weight_IOM_grp_b=if_else(weight<weight_IOM_grp,1,0),
+         height_FAO_grp_b=if_else(height<height_FAO_grp,1,0),
+          height_FAO_age_b=if_else(height<height_FAO_age,1,0),
+         height_IOM_grp_b=if_else(height<height_IOM_grp,1,0),
+         sex=as.factor(sex))%>%
+  dplyr::select(hhid,mid,age,age_range,sex,contains("weight"),contains("height"),contains("AE_"),contains("code"),contains("R1"))
+  
+                
+
+w_allref=allref%>%
+  as_survey_design(ids=vcode, strata=dvcode,weights=popweightR1)%>%
+  group_by(sex,age_range)%>%
+  summarise_all(survey_mean,na.rm=TRUE)%>%
+  dplyr::select(-contains("code"),-contains("R1"),-contains("hhid"),-contains("mid"),-contains("_se"))
+
+
+w=allref%>%
+  group_by(sex,age_range)%>%
+    dplyr::summarise(n=n())
+
+w_allref=left_join(w_allref,w,by=c("sex","age_range"))
+
+
+age=c("Toddler (2-3)","Young Child (4-7)","Older Child (8-10)","Young Adolescent (11-13)","Older Adolescent (14-17)",
+      "Young Adult (18-29)","Adult (30-59)","Older Adult (60+)")
+w_allref$age_range<-reorder.factor(w_allref$age_range,new.order=age)
+levels(w_allref$sex)<-list("Male"="1","Female"="2")
+
+graph_allref=w_allref%>%
+  arrange(age_range)%>%
+mutate_at(vars(contains("_b")),funs(.*100))%>%
+pivot_longer(cols=weight:AE_IOM_sample,names_to=c("variable","source","reflevel","pct"),names_sep="_",values_drop_na = TRUE)%>%
+  mutate(source=if_else(is.na(source),"sample",source),reflevel=if_else(is.na(reflevel),"sample",reflevel),sourceref=as.factor(paste(source,reflevel,sep="_")))
+         
+
+x.label=c("Toddler \n (2-3)","Young Child \n (4-7)","Older Child \n (8-10)","Young Adolescent \n (11-13)","Older Adolescent \n (14-17)",
+      "Young Adult \n (18-29)","Adult \n (30-59)","Older Adult \n (60+)")
+
+sr_a=unique(graph_allref[graph_allref$variable=="AE",]$sourceref)
+sr_w=unique(graph_allref[graph_allref$variable=="weight",]$sourceref)
+sr_h=unique(graph_allref[graph_allref$variable=="height",]$sourceref)
+
+brk=c("sample_sample","India_grp","FAO_sample","FAO_age","FAO_grp","IOM_sample","IOM_grp") 
+lbl=c("reported (sample wt/ht)", "India (age group)","WHO/FAO (sample wt/ht)","WHO/FAO (age)","WHO/FAO (age group)","IOM (sample wt/ht)","IOM (age group)")
+
+clr=c("black","green","blue","blue","blue","red","red") #color represents source
+lnt=c("solid","dotted","solid","dashed","dotted","solid","dotted") #linetype represents reference level 
+
+w=ggplot()+
+  geom_path(data=subset(graph_allref,is.na(pct)&variable=="weight"),aes(x=factor(age_range),y=value,group=sourceref,color=sourceref,linetype=sourceref),size=1)+
+  scale_color_manual(breaks=brk,values=clr,labels=lbl,name="Data Source (color) and \n Reference Level (linetype)")+
+  scale_linetype_manual(breaks=brk,values=lnt,labels=lbl,name="Data Source (color) and \n Reference Level (linetype)")+
+  scale_y_continuous(name="Weight (kg)",limits=c(0,80),breaks=seq(0,80,10),expand=c(0,0))+
+  scale_x_discrete(name="Age Group",breaks=age,labels=x.label)+
+  facet_grid(cols=vars(factor(sex)))+
+  theme(legend.position=c(0.4,0.25),legend.background=element_rect(size=0.5,color="black"),panel.background = element_blank(),
+        axis.line = element_line(color="black"),axis.text.x = element_text(angle = 45, hjust = 1))
+
+print(w)
+ggsave("./Output/2011/refweight_plot.png",width=12,height=9)
+
+h=ggplot()+
+  geom_path(data=subset(graph_allref,is.na(pct)&variable=="height"),aes(x=factor(age_range),y=value,group=sourceref,color=sourceref,linetype=sourceref),size=1)+
+ scale_color_manual(breaks=brk,values=clr,labels=lbl,name="Data Source (color) and \n Reference Level (linetype)")+
+  scale_linetype_manual(breaks=brk,values=lnt,labels=lbl,name="Data Source (color) and \n Reference Level (linetype)")+
+  scale_y_continuous(name="Height (cm)",limits=c(0,200),breaks=seq(0,200,20),expand=c(0,0))+
+  scale_x_discrete(name="Age Group",breaks=age,labels=x.label)+
+  facet_grid(cols=vars(factor(sex)))+
+  theme(legend.position=c(0.5,0.25),legend.background=element_rect(size=0.5,color="black"),panel.background = element_blank(),
+        axis.line = element_line(color="black"),axis.text.x = element_text(angle = 45, hjust = 1))
+print(h)
+ggsave("./Output/2011/refheight_plot.png",width=12,height=9)
+
+
+
+a=ggplot()+
+  geom_path(data=subset(graph_allref,is.na(pct)&variable=="AE"),aes(x=factor(age_range),y=value,group=sourceref,color=sourceref,linetype=sourceref),size=1)+
+  scale_color_manual(breaks=brk,values=clr,labels=lbl,name="Data Source (color) and \n Reference Level (linetype)")+
+  scale_linetype_manual(breaks=brk,values=lnt,labels=lbl,name="Data Source (color) and \n Reference Level (linetype)")+
+  scale_y_continuous(name="Adult Equivalents",limits=c(0,1.5),breaks=seq(0,1.5,0.1),expand=c(0,0))+
+  scale_x_discrete(name="Age Group",breaks=age,labels=x.label)+
+  facet_grid(cols=vars(factor(sex)))+
+  theme(legend.position=c(0.6,0.85),legend.background=element_rect(size=0.75,color="black"),panel.background = element_blank(),
+        axis.line = element_line(color="black"),axis.text.x = element_text(angle = 45, hjust = 1))
+print(a)
+ggsave("./Output/2011/AE_plot.png",width=12,height=9)
+
+
+
+wtht_allref=w_allref%>%
+    arrange(age_range)%>%
+ mutate_at(vars(contains("_b")),funs(scales::percent(.,accuracy=.01)))%>%
+  dplyr::select(sex,age_range,age,weight,contains("weight_India_grp"),contains("weight_FAO_age"),contains("weight_FAO_grp"),contains("weight_IOM_grp"),height,contains("height_FAO_age"),contains("height_FAO_grp"),contains("height_IOM_grp"))
+
+AE_allref=w_allref%>%
+  arrange(age_range)%>%
+  dplyr::select(sex,age_range,age,AE_FAO_sample,AE_IOM_sample,AE_FAO_age,AE_FAO_grp,AE_IOM_grp,AE_India_grp,n)
+
+
+
+whref_print<-kable(wtht_allref,booktabs=TRUE,caption="Comparison of Reference Standards for Weight and Height",
+      col.names=c("Sex","Age Range","Age","reported","Reference Group","% Below","Reference Age","% Below","Reference Group","% Below","Reference Group","% Below","reported","Reference Age","% Below","Reference Group","% Below","Reference Group","% Below"),
+                  escape=F)%>%
+  kable_styling(full_width=FALSE,"striped")%>%
+  add_header_above(c(" "=3," "=1,"India"=2, "WHO/FAO"=4,"IOM"=2," "=1,"WHO/FAO"=4,"IOM"=2)) %>%
+add_header_above(c(" "=3,"Weight (kg) "=9, "Height (cm) "=7)) %>%
+   column_spec(c(1,3,12,19),border_right = TRUE)%>%
+  #row_spec(c(3:4,7:8,11:12),background="gray90")%>%
+ footnote(general="Data are population-weighted means using sample weights provided by IFPRI.
+          India refers to the Dietary Guidelines for India published by the National Institute of Nutrition in 2011
+          WHO/FAO refers to the Human Energy Requirements published by WHO/FAO in 2001
+          IOM refrs to the Dietary Reference Intakes published by the Institute of Medicine in 2005")
+
+save_kable(whref_print,"./Output/2011/refwtht.png")
+print(whref_print)
+
+
+AE_print<-kable(AE_allref,booktabs=TRUE,caption="Comparison of Adult Equivalents",
+      col.names=c("Sex","Age Range","Age","WHO/FAO","IOM","WHO/FAO","WHO/FAO","IOM","India","N"),
+                  escape=F)%>%
+  kable_styling(full_width=FALSE,"striped")%>%
+  add_header_above(c(" "=3,"Reported Weight/Height"=2,"Age Weight/Height"=1,"Reference Group Weight/Height"=3," "=1)) %>%
+add_header_above(c(" "=3,"Adult Equivalents"=6," "=1)) %>%
+   column_spec(c(1,3,9,10),border_right = TRUE)%>%
+  #row_spec(c(3:4,7:8,11:12),background="gray90")%>%
+ footnote(general="Data are population-weighted means using sample weights provided by IFPRI.
+          Adult Equivalent is equal to individual energy requirements relative to the energy requirements for an 18-30 year old male with moderate activity.
+          India refers to the Dietary Guidelines for India published by the National Institute of Nutrition in 2011
+          WHO/FAO refers to the Human Energy Requirements published by WHO/FAO in 2001
+          IOM refrs to the Dietary Reference Intakes published by the Institute of Medicine in 2005")
+
+save_kable(AE_print,"./Output/2011/AE_2011.png")
+print(AE_print)
+
+
+
+rm(allref,w,ref_wtht,a,h,w,graph_allref,sr_a,sr_w,sr_h,AE_print,whref_print,wtht_allref,w_allref,AE_allref)
+
+
+```
+
+
+
+3. Individual calorie inadequacy by comparing reported consumption to target
+```{r kcalinadequacy}
+
+
+nutnames=c("kcal","protein","fat","carb","calcium","iron") 
+
+#######NUTRIENTS
+#allocate allocated of total hh nutrient to each individual and separate into nutrient-specific tables
+ref=c("India_grp","FAO_grp","IOM_grp","FAO_age","FAO_sample","IOM_sample")
+for (i in 1:length(nutnames)) {
+  
+  temp=w.I.roster_2011%>%
+    dplyr::select(hhid,mid,sex,age,BMI,age_range,contains("share"),contains(nutnames[[i]]),hhds,dvcode,vcode,aeu,hhweightR1,popweightR1,BMI_FAO_age)%>%
+    arrange(hhid)
+  
+ for (j in ref){
+
+temp[[paste0("I_allocated_",j,sep="_",nutnames[[i]])]]<-temp[[paste0("hh_",nutnames[[i]])]]*temp[[paste0("share_",j)]]
+
+
+  }
+   assign(paste(nutnames[[i]],"inadequacy",sep="_"),temp)
+}
+
+
+kcal_inadequacy=kcal_inadequacy%>%
+  mutate(sex=as.factor(sex),BMI_inadequate_FAO_age=if_else(BMI<BMI_FAO_age,1,0),
+         BMI_gap_FAO_age=if_else(BMI_inadequate_FAO_age==1,(BMI-BMI_FAO_age)/BMI_FAO_age,as.numeric(NA)))%>%
+  group_by(hhid)%>%
+  mutate_at(vars(starts_with("kcal_")), funs(hh_ = "sum"))%>%
+      ungroup()%>%
+mutate_at(.vars=vars(matches("hh_")),.funs=funs("inadequate"=if_else(hh_kcal<.,1,0)))%>%
+  dplyr::select(-hh_kcal_inadequate)
+
+
+#ENERGY (kcal/BMI)
+for (j in ref){
+  #reported reported consumption inadequacy
+  kcal_inadequacy[[paste0("reported_inadequate_",j)]]<-if_else(kcal_inadequacy$I_kcal<kcal_inadequacy[[paste0("kcal",sep="_",j)]],1,0)
+  kcal_inadequacy[[paste0("reported_gap_",j)]]<-if_else(kcal_inadequacy[[paste0("reported_inadequate_",j)]]==1,(kcal_inadequacy$I_kcal-kcal_inadequacy[[paste0("kcal",sep="_",j)]])/kcal_inadequacy[[paste0("kcal",sep="_",j)]],as.numeric(NA))
+  
+  kcal_inadequacy[[paste0("reported_Iina.HHad_",j)]]<-if_else(kcal_inadequacy[[paste0("reported_inadequate_",j)]]==1&kcal_inadequacy[[paste0("kcal_",j,"_hh__inadequate")]]==0,1,0) #inadequate individual in adequate household
+    kcal_inadequacy[[paste0("reported_Iad.HHina_",j)]]<-if_else(kcal_inadequacy[[paste0("reported_inadequate_",j)]]==0&kcal_inadequacy[[paste0("kcal_",j,"_hh__inadequate")]]==1,1,0) #adequate individual in inadequate household
+  
+  #allocated allocation inadequacy
+  kcal_inadequacy[[paste0("allocated_inadequate_",j)]]<-if_else(kcal_inadequacy[[paste0("I_allocated_",j,"_kcal")]]<kcal_inadequacy[[paste0("kcal",sep="_",j)]],1,0)
+  kcal_inadequacy[[paste0("allocated_gap_",j)]]<-if_else(kcal_inadequacy[[paste0("allocated_inadequate_",j)]]==1,(kcal_inadequacy[[paste0("I_allocated_",j,"_kcal")]]-kcal_inadequacy[[paste0("kcal",sep="_",j)]])/kcal_inadequacy[[paste0("kcal",sep="_",j)]],as.numeric(NA))
+ 
+   kcal_inadequacy[[paste0("allocated_Iina.HHad_",j)]]<-if_else(kcal_inadequacy[[paste0("allocated_inadequate_",j)]]==1&kcal_inadequacy[[paste0("kcal_",j,"_hh__inadequate")]]==0,1,0) 
+    kcal_inadequacy[[paste0("allocated_Iad.HHina_",j)]]<-if_else(kcal_inadequacy[[paste0("allocated_inadequate_",j)]]==0&kcal_inadequacy[[paste0("kcal_",j,"_hh__inadequate")]]==1,1,0)
+  
+}
+
+w_kcal=kcal_inadequacy%>%
+  as_survey_design(ids=vcode, strata=dvcode,weights=popweightR1)%>%
+  group_by(sex,age_range)%>%
+  summarise_all(survey_mean,na.rm=TRUE)%>%
+  dplyr::select(sex,age_range,contains("inadequate"),contains("gap"),contains("Iad"),contains("Iina"),-contains("_se"))
+
+w_kcal$age_range<-reorder.factor(w_kcal$age_range,new.order=age)
+w_kcal[w_kcal==0]<-as.numeric(NA)
+levels(w_kcal$sex)<-list("Male"="1","Female"="2")
+
+graph_kcalf=w_kcal%>%
+  arrange(age_range)%>%
+    dplyr::select(sex,age_range,BMI_inadequate_FAO_age,contains("reported_inadequate"),contains("allocated_inadequate"))%>%
+    mutate_at(vars(contains("inadequate")),funs(.*100))%>%
+pivot_longer(cols=3:15,names_to=c("variable","sourceref"),names_sep="_inadequate_",values_drop_na = TRUE)
+
+
+graph_kcali=w_kcal%>%
+  arrange(age_range)%>%
+    dplyr::select(sex,age_range,BMI_gap_FAO_age,contains("reported_gap"),contains("allocated_gap"))%>%
+    mutate_at(vars(contains("gap")),funs(.*100))%>%
+pivot_longer(cols=3:15,names_to=c("variable","sourceref"),names_sep="_gap_",values_drop_na = TRUE)
+
+vlevel=c("reported", "BMI", "allocated")
+graph_kcalf$variable<-reorder.factor(graph_kcalf$variable,new.order=vlevel)
+graph_kcali$variable<-reorder.factor(graph_kcali$variable,new.order=vlevel)
+
+kcalf_m=ggplot()+
+  geom_path(data=subset(graph_kcalf,sex=="Male"),aes(x=factor(age_range),y=value,group=sourceref,color=sourceref,linetype=sourceref),size=1)+
+  scale_color_manual(breaks=brk,values=clr,labels=lbl,name="Data Source (color) and \n Reference Level (linetype)")+
+  scale_linetype_manual(breaks=brk,values=lnt,labels=lbl,name="Data Source (color) and \n Reference Level (linetype)")+
+  scale_y_continuous(name="Energy inadequacy frequency (%) ",limits=c(0,100),breaks=seq(0,100,10),expand=c(0,0))+
+  scale_x_discrete(name="Age Group (Male)",age,labels=x.label)+
+  facet_grid(cols=vars(factor(variable)))+
+  theme(legend.position=c(0.5,0.4),legend.background=element_rect(size=0.5,color="black"),panel.background = element_blank(),
+        axis.line = element_line(color="black"),axis.text.x = element_text(angle = 45, hjust = 1))
+print(kcalf_m)
+ggsave("./Output/2011/kf_plot_m.png",width=12,height=9)
+
+kcali_m=ggplot()+
+  geom_path(data=subset(graph_kcali,sex=="Male"),aes(x=factor(age_range),y=value,group=sourceref,color=sourceref,linetype=sourceref),size=1)+
+ scale_color_manual(breaks=brk,values=clr,labels=lbl,name="Data Source (color) and \n Reference Level (linetype)")+
+  scale_linetype_manual(breaks=brk,values=lnt,labels=lbl,name="Data Source (color) and \n Reference Level (linetype)")+
+  scale_y_continuous(name="Energy inadequacy intensity (%) ",limits=c(-100,0),breaks=seq(-100,0,10),expand=c(0,0))+
+  scale_x_discrete(name="Age Group (Male)",breaks=age,labels=x.label)+
+  facet_grid(cols=vars(factor(variable)))+
+  theme(legend.position=c(0.5,0.4),legend.background=element_rect(size=0.5,color="black"),panel.background = element_blank(),
+        axis.line = element_line(color="black"),axis.text.x = element_text(angle = 45, hjust = 1))
+print(kcali_m)
+ggsave("./Output/2011/ki_plot_m.png",width=12,height=9)
+
+
+kcalf_w=ggplot()+
+  geom_path(data=subset(graph_kcalf,sex=="Female"),aes(x=factor(age_range),y=value,group=sourceref,color=sourceref,linetype=sourceref),size=1)+
+  scale_color_manual(breaks=brk,values=clr,labels=lbl,name="Data Source (color) and \n Reference Level (linetype)")+
+  scale_linetype_manual(breaks=brk,values=lnt,labels=lbl,name="Data Source (color) and \n Reference Level (linetype)")+
+  scale_y_continuous(name="Energy inadequacy frequency (%) ",limits=c(0,100),breaks=seq(0,100,10),expand=c(0,0))+
+  scale_x_discrete(name="Age Group (Female)",breaks=age,labels=x.label)+
+  facet_grid(cols=vars(factor(variable)))+
+  theme(legend.position=c(0.5,0.4),legend.background=element_rect(size=0.5,color="black"),panel.background = element_blank(),
+        axis.line = element_line(color="black"),axis.text.x = element_text(angle = 45, hjust = 1))
+print(kcalf_w)
+ggsave("./Output/2011/kf_plot_w.png",width=12,height=9)
+
+kcali_f=ggplot()+
+  geom_path(data=subset(graph_kcali,sex=="Female"),aes(x=factor(age_range),y=value,group=sourceref,color=sourceref,linetype=sourceref),size=1)+
+scale_color_manual(breaks=brk,values=clr,labels=lbl,name="Data Source (color) and \n Reference Level (linetype)")+
+  scale_linetype_manual(breaks=brk,values=lnt,labels=lbl,name="Data Source (color) and \n Reference Level (linetype)")+
+  scale_y_continuous(name="Energy inadequacy intensity (%) ",limits=c(-100,0),breaks=seq(-100,0,10),expand=c(0,0))+
+  scale_x_discrete(name="Age Group (Female)",breaks=age,labels=x.label)+
+  facet_grid(cols=vars(factor(variable)))+
+  theme(legend.position=c(0.5,0.4),legend.background=element_rect(size=0.5,color="black"),panel.background = element_blank(),
+        axis.line = element_line(color="black"),axis.text.x = element_text(angle = 45, hjust = 1))
+print(kcali_f)
+ggsave("./Output/2011/ki_plot_w.png",width=12,height=9)
+
+fi_kcal=w_kcal%>%
+  arrange(age_range)%>%
+mutate_at(vars(contains("gap")),funs(scales::percent(.,accuracy=.1)))%>%
+mutate_at(vars(contains("inadequate")),funs(scales::percent(.,accuracy=.1)))%>%
+  dplyr::select(sex,age_range,starts_with("BMI_inadequate"),contains("reported_inadequate"),contains("allocated_inadequate"),starts_with("BMI_gap"),contains("reported_gap"),contains("allocated_gap"))
+
+fi_kcal[is.na(fi_kcal)]<-""
+
+kcal_freq=fi_kcal%>%
+  dplyr::select(sex,age_range,contains("inadequate"))
+
+kcal_inten=fi_kcal%>%
+  dplyr::select(sex,age_range,contains("gap"))
+
+
+freq_kcal_print<-kable(kcal_freq,booktabs=TRUE,caption="Frequency of Energy Inadequacy by Reference Standard",
+      col.names=c("Sex","Age Range","BMI",rep(list("India","FAO/WHO","IOM","FAO/WHO","FAO/WHO","IOM"),2)),
+      escape=F)%>%
+  kable_styling(full_width=FALSE,"striped","bordered")%>% 
+    add_header_above(c(" "=2," " =1,rep(list("wrt Age Group Req"=3,"wrt Age Req"=1,"wrt Individual Req"=2),2)))%>% 
+  add_header_above(c(" "=2," "=1,"Reported Individual Consumption"=6,"Allocated Household Consumption"=6))%>% 
+#add_header_above(c(" "=2,"Frequency of Inadequacy"=11))%>% 
+   column_spec(c(2,3,9,15),border_right = TRUE)%>%
+  #row_spec(c(3:4,7:8,11:12),background="gray90")%>%
+ footnote(general="Data are population-weighted means using sample weights provided by IFPRI.
+          Consumption allocated is equal to individual Adult Equivalents/Total Household Adult Equivalents.
+          India refers to the Dietary Guidelines for India published by the National Institute of Nutrition in 2011
+          WHO/FAO refers to the Human Energy Requirements published by WHO/FAO in 2001
+          IOM refrs to the Dietary Reference Intakes published by the Institute of Medicine in 2005")
+
+
+save_kable(freq_kcal_print,"./Output/2011/kcal_freq.png")
+print(freq_kcal_print)
+
+
+
+inten_kcal_print<-kable(kcal_inten,booktabs=TRUE,caption="Intensity of Energy Inadequacy",
+  col.names=c("Sex","Age Range","BMI",rep(list("India","FAO/WHO","IOM","FAO/WHO","FAO/WHO","IOM"),2)),
+      escape=F)%>%
+  kable_styling(full_width=FALSE,"striped","bordered")%>% 
+    add_header_above(c(" "=2," " =1,rep(list("wrt Age Group Req"=3,"wrt Age Req"=1,"wrt Individual Req"=2),2)))%>% 
+  add_header_above(c(" "=2," "=1,"Reported Individual Consumption"=6,"Allocated Household Consumption"=6))%>% 
+#add_header_above(c(" "=2,"Frequency of Inadequacy"=11))%>% 
+   column_spec(c(2,3,9,15),border_right = TRUE)%>%
+  #row_spec(c(3:4,7:8,11:12),background="gray90")%>%
+ footnote(general="Data are population-weighted means using sample weights provided by IFPRI.
+          Consumption allocated is equal to individual Adult Equivalents/Total Household Adult Equivalents.
+          India refers to the Dietary Guidelines for India published by the National Institute of Nutrition in 2011
+          WHO/FAO refers to the Human Energy Requirements published by WHO/FAO in 2001
+          IOM refrs to the Dietary Reference Intakes published by the Institute of Medicine in 2005")
+
+
+save_kable(inten_kcal_print,"./Output/2011/kcal_inten.png")
+print(inten_kcal_print)
+
+
+rm(list=ls(pattern="inadequacy"),fi_kcal,kcalf_m,kcalf_w,kcali_f,kcali_m,temp,freq_kcal_print,inten_kcal_print,i,j,nutnames,graph_kcalf,graph_kcali,kcal_freq,kcal_inten)
+
+
+
+
+
+```
+
+
+
+4. Energy inequality
+```{r kcalinequality}
+
+graph_kcal_ineq=w_kcal%>%
+  arrange(age_range)%>%
+    dplyr::select(sex,age_range,contains("Iina"),contains("Iad"))%>%
+pivot_longer(cols=3:26,names_to=c("v1","v2","v3","v4"),names_sep="_",values_drop_na = FALSE)%>%
+  unite(v3,v4,col="sourceref",sep="_")%>%
+  mutate(value=value*100)
+
+graph_kcal_ineq$v2 <- factor(graph_kcal_ineq$v2, levels = c("Iina.HHad", "Iad.HHina"), 
+                  labels = c("Inadequate individual in adequate household", "Adequate individual in inadequate household"))
+
+#reported HH inequality
+k_HHinequality=ggplot()+
+  geom_path(data=subset(graph_kcal_ineq,v1=="reported"),aes(x=factor(age_range),y=value,group=sourceref,color=sourceref,linetype=sourceref),size=1)+
+  scale_color_manual(breaks=brk,values=clr,labels=lbl,name="Data Source (color) and \n Reference Level (linetype)")+
+  scale_linetype_manual(breaks=brk,values=lnt,labels=lbl,name="Data Source (color) and \n Reference Level (linetype)")+
+  scale_y_continuous(name="Energy Inadequacy Frequency for Reported Consumption (%) ",limits=c(0,30),breaks=seq(0,30,10),expand=c(0,0))+
+  scale_x_discrete(name="Age Group",breaks=age,labels=x.label)+
+  facet_grid(cols=vars(factor(sex)),rows=vars(factor(v2)))+
+  theme(legend.position=c(0.5,0.4),legend.background=element_rect(size=0.5,color="black"),panel.background = element_blank(),
+        axis.line = element_line(color="black"),panel.spacing = unit(1, "lines"),axis.text.x = element_text(angle = 45, hjust = 1))
+print(k_HHinequality)
+
+ggsave("./Output/2011/kf_HHineq.png",width=12,height=9)
+
+
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+Variables for Li Ju and Siyao
+```{r}
+
+#hh level inadequacy LOOK AT ME
+hh_kcal_inad=kcal_inadequacy%>%
+  group_by(hhid,vcode,dvcode,popweightR1,hhweightR1)%>%
+  #dplyr::summarise(across(starts_with("kcal"),mean,na.rm=TRUE))%>%
+  dplyr::summarise(reported_inadequate_FAO_grp=mean(reported_inadequate_FAO_grp,na.rm=TRUE))%>%
+  ungroup()%>%
+  mutate(any_kcal_inadequate=if_else(reported_inadequate_FAO_grp>0,1,0))
+#use hh_FAO_age_hh_inadequate
+
+# Outcomes:
+# Average BMI among children in a household
+# Portion of children under median BMI within a household by WHO Recommendations
+# If a household has any children with inadequacy (average of the BMI inadequacy variables >0 → inadequacy exists)
+# task:create kcal and BMI inadequacy variables needed
+
+#BMI inadequate
+hh_BMI=kcal_inadequacy%>%
+  filter(age<18)%>%
+  group_by(hhid,vcode,dvcode,popweightR1,hhweightR1)%>%
+  dplyr::summarise(across(starts_with("BMI"),mean,na.rm=TRUE))%>%
+  ungroup()%>%
+  mutate(any_BMI_inadequate=if_else(BMI_inadequate_FAO_age>0,1,0))
+
+#hhds
+hh_hhds = w.hh.roster_2011%>%
+  dplyr::select(hhid,hhds)
+
+# Predictors:
+# Whether a household has been visited by health workers in last 6 months
+# Number of health workers’ visits in last 6 months (categorize 0~2)
+hh_workervisits = w.hh.roster_2011%>%
+  dplyr::select(hhid, visit_sixmo, num_visited_sixmo)
+
+# merge and only keep distinct rows
+hh_BMI_workervisits = left_join(hh_BMI,hh_workervisits,by=c("hhid"))
+hh_kcal_workervisits = left_join(hh_kcal_inad, hh_workervisits, by=c("hhid"))
+hh_hhds_workervisits = left_join(hh_hhds, hh_workervisits, by=c("hhid"))
+  
+```
+
+Siyao's Analysis
+
+ANOVA:any health worker visits & average BMI, BMI inadequacy
+```{r}
+
+#descriptive statistics
+# group_by(hh_BMI_workervisits, hhid) %>%
+#   summarise(
+#     count = n(),
+#     mean = mean(BMI, na.rm = TRUE),
+#     sd = sd(BMI, na.rm = TRUE)
+#   )
+
+# group_by(hh_BMI_workervisits, hhid) %>%
+#   summarise(
+#     count = n(),
+#     mean = mean(num_visited_sixmo, na.rm = TRUE),
+#     sd = sd(num_visited_sixmo, na.rm = TRUE)
+#   )
+
+w_BMI_workervisit=hh_BMI_workervisits%>%
+  as_survey_design(ids=vcode, strata=dvcode,weights=popweightR1)%>%
+  summarise_all(survey_mean,na.rm=TRUE)
+
+#ANOVA
+# levels: visited or not 
+hh_BMI_workervisits$visit_sixmo <- ordered(hh_BMI_workervisits$visit_sixmo,
+                         levels = c(0, 1))
+
+# Compute the analysis of variance
+res.aov <- aov(BMI ~ visit_sixmo, data = hh_BMI_workervisits)
+#res.aov <- aov(any_BMI_inadequate ~ visit_sixmo, data = hh_BMI_workervisits)
+# Summary of the analysis
+summary(res.aov)
+
+```
+ANOVA:any health worker visits & kcal inadequacy, reported kcal inadequacy FAO group
+```{r}
+
+w_kcal_workervisit=hh_kcal_workervisits%>%
+  as_survey_design(ids=vcode, strata=dvcode,weights=popweightR1)%>%
+  summarise_all(survey_mean,na.rm=TRUE)
+
+#ANOVA
+# levels: visited or not 
+hh_kcal_workervisits$visit_sixmo <- ordered(hh_kcal_workervisits$visit_sixmo,
+                         levels = c(0, 1))
+
+# Compute the analysis of variance
+#res.aov <- aov(any_kcal_inadequate ~ visit_sixmo, data = hh_kcal_workervisits)
+res.aov <- aov(reported_inadequate_FAO_grp ~ visit_sixmo, data = hh_kcal_workervisits)
+# Summary of the analysis
+summary(res.aov)
+
+```
+ANOVA:any health worker visits & hhds
+```{r}
+
+w_hhds_workervisit=hh_hhds_workervisits%>%
+  as_survey_design(ids=hhds)%>%
+  summarise_all(survey_mean,na.rm=TRUE)
+
+#ANOVA
+# levels: visited or not 
+hh_hhds_workervisits$visit_sixmo <- ordered(hh_hhds_workervisits$visit_sixmo,
+                         levels = c(0, 1))
+
+# Compute the analysis of variance
+#res.aov <- aov(any_kcal_inadequate ~ visit_sixmo, data = hh_kcal_workervisits)
+res.aov <- aov(hhds ~ visit_sixmo, data = hh_hhds_workervisits)
+# Summary of the analysis
+summary(res.aov)
+
+```
+
+Linear Regression - number of health worker visits & BMI inadequacy
+```{r}
+
+hh_BMI_workervisits_num = hh_BMI_workervisits%>%
+  filter(visit_sixmo == 1)%>%
+  dplyr::select(num_visited_sixmo,any_BMI_inadequate)%>%
+  filter(num_visited_sixmo<24) # only for now drop out the outlier
+
+#hh_BMI_workervisits_num = hh_BMI_workervisits_num[c("BMI", "num_visited_sixmo")]
+
+lmVisit = lm(any_BMI_inadequate~num_visited_sixmo, data = hh_BMI_workervisits_num) #Create the linear regression
+summary(lmVisit) #Review the results
+plot(hh_BMI_workervisits_num, pch = 16, col = "blue") #Plot the results
+abline(lmVisit) #Add a regression line
+
+```
+Linear Regression - number of health worker visits & average BMI
+```{r}
+
+hh_BMI_workervisits_num = hh_BMI_workervisits%>%
+  filter(is.finite(BMI))%>%
+  # filter(visit_sixmo == 1)%>%
+  # filter(age_range != "Older Adolescent (14-17)")%>%
+  # filter(age_range == "Young Adolescent (11-13)")%>%
+  # filter(age_range == "Older Child (8-10)")%>%
+  # filter(age_range == "Young Child (4-7)")%>%
+  dplyr::select(num_visited_sixmo,BMI)%>%
+  filter(num_visited_sixmo<24) # only for now drop out the outlier
+
+#hh_BMI_workervisits_num = hh_BMI_workervisits_num[c("BMI", "num_visited_sixmo")]
+
+lmVisit = lm(BMI~num_visited_sixmo, data = hh_BMI_workervisits_num) #Create the linear regression
+summary(lmVisit) #Review the results
+plot(hh_BMI_workervisits_num, pch = 16, col = "blue") #Plot the results
+abline(lmVisit) #Add a regression line
+
+ggplot(hh_BMI_workervisits_num,aes(num_visited_sixmo,BMI))+geom_boxplot(aes(group=num_visited_sixmo))+ylim(10,30)+xlab("Number of Health Worker Visits in the past six months")+ylab("Average HH BMI for children under 18")+ geom_smooth(method = "lm", se = FALSE) + theme_minimal()
+
+
+
+```
+
+
+Linear Regression - number of health worker visits & any kcal inadequacy
+```{r}
+
+hh_kcal_workervisits_num = hh_kcal_workervisits%>%
+  filter(visit_sixmo == 1)%>%
+  dplyr::select(num_visited_sixmo,any_kcal_inadequate)%>%
+  filter(num_visited_sixmo<24) # only for now drop out the outlier
+
+lmVisit = lm(any_kcal_inadequate~num_visited_sixmo, data = hh_kcal_workervisits_num) #Create the linear regression
+summary(lmVisit) #Review the results
+plot(hh_kcal_workervisits_num, pch = 16, col = "blue") #Plot the results
+abline(lmVisit) #Add a regression line
+
+```
+Linear Regression - number of health worker visits & reported kcal inadequacy FAO group
+```{r}
+
+hh_kcal_workervisits_num = hh_kcal_workervisits%>%
+  filter(visit_sixmo == 1)%>%
+  dplyr::select(num_visited_sixmo,reported_inadequate_FAO_grp)%>%
+  filter(num_visited_sixmo<24) # only for now drop out the outlier
+
+lmVisit = lm(reported_inadequate_FAO_grp~num_visited_sixmo, data = hh_kcal_workervisits_num) #Create the linear regression
+summary(lmVisit) #Review the results
+plot(hh_kcal_workervisits_num, pch = 16, col = "blue") #Plot the results
+abline(lmVisit) #Add a regression line
+
+# task: add an abline
+ggplot(hh_kcal_workervisits_num,aes(num_visited_sixmo,reported_inadequate_FAO_grp))+geom_jitter(aes(group=num_visited_sixmo))+xlab("Number of Health Worker Visits in the past six months")+ylab("Percentage of Children with Caloric Inadequcy")+ geom_smooth(method = "lm", se = FALSE) +theme_minimal()
+
+
+```
+Linear Regression - number of health worker visits & hhds
+```{r}
+
+hh_hhds_workervisits_num = hh_hhds_workervisits%>%
+  filter(visit_sixmo == 1)%>%
+  dplyr::select(num_visited_sixmo,hhds)%>%
+  filter(num_visited_sixmo<24) # only for now drop out the outlier
+
+lmVisit = lm(hhds~num_visited_sixmo, data = hh_hhds_workervisits_num) #Create the linear regression
+summary(lmVisit) #Review the results
+plot(hh_hhds_workervisits_num, pch = 16, col = "blue") #Plot the results
+abline(lmVisit) #Add a regression line
+
+# boxplot(hhds~num_visited_sixmo,data=hh_hhds_workervisits_num, main="Car Milage Data",
+#    xlab="Number of Cylinders", ylab="Miles Per Gallon")
+
+ggplot(hh_hhds_workervisits_num,aes(num_visited_sixmo,as.numeric(factor(hhds))))+geom_jitter(aes(group=num_visited_sixmo))+xlab("Number of Health Worker Visits in the past six months")+ylab("Household Dietary Diversity Score")+ geom_smooth(method = "lm", se = FALSE)+theme_minimal()
+
+```
+
